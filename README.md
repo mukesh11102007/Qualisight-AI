@@ -1,0 +1,2 @@
+# Qualisight-AI
+DT PROJECT FOR SEC SEM
