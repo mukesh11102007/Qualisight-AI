@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QualiSight AI | Enterprise Command</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Outfit', sans-serif; background: #f8fafc; color: #0f172a; height: 100vh; width: 100vw; display: flex; overflow: hidden; }
+        .sidebar { background: #ffffff; border-right: 1px solid #e2e8f0; }
+        .card { background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); transition: transform 0.2s, box-shadow 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .stream-box { background: #0f172a; border-radius: 30px; overflow: hidden; position: relative; aspect-ratio: 16/9; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        /* Premium Toggle */
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #e2e8f0; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        input:checked + .slider { background-color: #0f172a; }
+        input:checked + .slider:before { transform: translateX(20px); }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar w-72 p-8 flex flex-col gap-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black italic">Q</div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-900 leading-none">QualiSight</h1>
+                <span class="text-[9px] font-black uppercase tracking-widest text-slate-400">Enterprise AI</span>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-6">
+            <div class="flex flex-col gap-2">
+                <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-2">Autonomous Mode</span>
+                <div class="card p-4 flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-700">Auto-Pilot</span>
+                    <label class="switch">
+                        <input type="checkbox" id="auto-pilot-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <nav class="flex flex-col gap-1">
+                <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-2 mb-2">Systems</span>
+                <a href="#" class="flex items-center gap-3 bg-slate-50 text-slate-900 p-3 rounded-xl font-bold text-sm border border-slate-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                    Dashboard
+                </a>
+                <a href="/test.html" target="_blank" class="flex items-center gap-3 text-slate-500 hover:text-slate-900 p-3 rounded-xl transition-all text-sm font-medium">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    Remote Units
+                </a>
+            </nav>
+        </div>
+
+        <div class="mt-auto">
+            <button onclick="logout()" class="flex items-center gap-3 text-slate-400 hover:text-red-500 transition-all font-bold text-sm w-full p-2">
+                Sign Out
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 h-full overflow-y-auto bg-slate-50/50 p-10 flex flex-col gap-10">
+        
+        <!-- Top Section -->
+        <div class="flex justify-between items-end">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">Global Monitoring</p>
+                <h2 class="text-4xl font-bold text-slate-900">Control Center</h2>
+            </div>
+            
+            <div class="flex gap-4">
+                <div class="card px-6 py-4 flex flex-col">
+                    <span class="text-[9px] font-bold uppercase text-slate-400 tracking-widest mb-1">Total Defects</span>
+                    <span id="defect-count" class="text-2xl font-bold text-slate-900">0</span>
+                </div>
+                <div class="card px-6 py-4 flex flex-col min-w-[140px]">
+                    <span class="text-[9px] font-bold uppercase text-slate-400 tracking-widest mb-1">AI Voice</span>
+                    <span class="text-emerald-500 font-bold text-sm flex items-center gap-2">
+                        <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse"></div> ACTIVE
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Chart -->
+        <div class="card p-8 h-56 relative bg-white overflow-hidden">
+            <canvas id="qualityChart"></canvas>
+            <div class="absolute top-6 right-8 text-[10px] font-black uppercase tracking-widest text-slate-300">Factory Performance Index</div>
+        </div>
+
+        <!-- Streams Grid -->
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-10">
+            <!-- Zone 1 -->
+            <div class="flex flex-col gap-4">
+                <div class="flex justify-between items-center px-2">
+                    <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                        Zone 1 <span id="status-1" class="text-[8px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-black uppercase">Offline</span>
+                    </h3>
+                </div>
+                <div class="stream-box shadow-2xl">
+                    <img id="feed-Zone-1" class="w-full h-full object-contain hidden" />
+                    <div id="wait-Zone-1" class="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                        <div class="w-8 h-8 border-2 border-slate-700 border-t-white rounded-full animate-spin"></div>
+                        <span class="text-[10px] font-bold text-slate-500 tracking-widest uppercase">Initializing...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Zone 2 -->
+            <div class="flex flex-col gap-4">
+                <div class="flex justify-between items-center px-2">
+                    <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                        Zone 2 <span id="status-2" class="text-[8px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-black uppercase">Offline</span>
+                    </h3>
+                </div>
+                <div class="stream-box shadow-2xl">
+                    <img id="feed-Zone-2" class="w-full h-full object-contain hidden" />
+                    <div id="wait-Zone-2" class="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                        <div class="w-8 h-8 border-2 border-slate-700 border-t-white rounded-full animate-spin"></div>
+                        <span class="text-[10px] font-bold text-slate-500 tracking-widest uppercase">Initializing...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity Feed -->
+        <div class="flex flex-col gap-6 mb-10">
+            <h3 class="text-xl font-bold text-slate-900 px-2">Recent Incidents</h3>
+            <div id="defect-history" class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8">
+                <!-- Records will load here -->
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        let ws = null;
+        let qualityChart = null;
+        const autoPilot = document.getElementById('auto-pilot-toggle');
+
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('qualityChart').getContext('2d');
+            qualityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(25).fill(''),
+                    datasets: [{
+                        label: 'Performance',
+                        data: Array(25).fill(100),
+                        borderColor: '#0f172a',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        y: { min: 0, max: 110, display: false },
+                        x: { display: false }
+                    }
+                }
+            });
+        }
+
+        function updateChart(isDefect) {
+            const current = qualityChart.data.datasets[0].data.slice(-1)[0];
+            const next = isDefect ? Math.max(10, current - 20) : Math.min(100, current + 2);
+            qualityChart.data.datasets[0].data.shift();
+            qualityChart.data.datasets[0].data.push(next);
+            qualityChart.update();
+        }
+
+        function connectWS() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}`);
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'stream') {
+                    const zoneId = data.zone.replace(' ', '-');
+                    const imgFeed = document.getElementById(`feed-${zoneId}`);
+                    const waitingText = document.getElementById(`wait-${zoneId}`);
+                    const status = document.getElementById(data.zone === 'Zone 1' ? 'status-1' : 'status-2');
+                    
+                    if (imgFeed) {
+                        imgFeed.src = data.image;
+                        imgFeed.classList.remove('hidden');
+                        waitingText.classList.add('hidden');
+                        status.innerText = "ONLINE";
+                        status.className = "text-[8px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase pulse";
+                    }
+                    updateChart(false);
+                }
+                if (data.type === 'defect') { 
+                    handleDefect(data.data);
+                }
+            };
+            ws.onclose = () => setTimeout(connectWS, 2000);
+        }
+
+        async function handleDefect(defect) {
+            loadDefects();
+            updateChart(true);
+            
+            const isAuto = localStorage.getItem('autoPilot') === 'true';
+            
+            speak(`Incident in ${defect.zone}. Issue: ${defect.message}.`);
+            
+            if (isAuto) {
+                _showAutoToast(`Auto-Dispatching Alert for ${defect.zone}...`);
+                sendAlert(defect.message, defect.image, defect.timestamp, defect.zone, null);
+            }
+        }
+
+        function _showAutoToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = "fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-2xl z-50 animate-bounce";
+            toast.innerText = `🤖 AUTO-PILOT: ${msg}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        async function loadDefects() {
+            const res = await fetch('/api/defects');
+            const result = await res.json();
+            const container = document.getElementById('defect-history');
+            const countEl = document.getElementById('defect-count');
+            
+            container.innerHTML = '';
+            countEl.innerText = result.data.length;
+
+            result.data.forEach(defect => {
+                const card = document.createElement('div');
+                card.className = 'card p-6 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500';
+                card.innerHTML = `
+                    <div class="relative rounded-2xl overflow-hidden aspect-[16/10] bg-slate-100 border border-slate-100">
+                        <img src="${defect.image}" class="w-full h-full object-cover" />
+                        <div class="absolute bottom-3 left-3 bg-white/90 backdrop-blur-md text-[8px] font-black px-2 py-1 rounded-lg text-slate-900 shadow-sm uppercase">${defect.zone}</div>
+                    </div>
+                    <div class="flex flex-col gap-4">
+                        <div class="flex justify-between items-start">
+                            <h4 class="font-bold text-slate-900 leading-tight">${defect.message}</h4>
+                            <span class="text-[9px] font-bold text-slate-400">${new Date(defect.timestamp).toLocaleTimeString()}</span>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="sendAlert('${defect.message}', '${defect.image}', '${defect.timestamp}', '${defect.zone}', this)" class="flex-1 py-2.5 bg-slate-900 text-white font-bold text-[10px] rounded-xl hover:bg-slate-800 transition-all uppercase tracking-wider">
+                                Dispatch Alert
+                            </button>
+                            <button onclick="deleteDefect('${defect._id}')" class="px-4 py-2.5 bg-slate-50 text-slate-400 hover:text-red-500 font-bold text-[10px] rounded-xl transition-all uppercase">
+                                Del
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function sendAlert(message, image, timestamp, zone, btn) {
+            if (btn) { btn.innerText = "DISPATCHING..."; btn.disabled = true; }
+            try {
+                const res = await fetch('/api/alerts/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, image, timestamp, zone })
+                });
+                if (res.ok && btn) { 
+                    btn.innerText = "DISPATCHED"; 
+                    btn.className = "flex-1 py-2.5 bg-emerald-500 text-white font-bold text-[10px] rounded-xl transition-all uppercase";
+                }
+            } catch (err) { if(btn) btn.innerText = "ERROR"; }
+        }
+
+        async function deleteDefect(id) {
+            if (!confirm("Remove incident log?")) return;
+            const res = await fetch(`/api/defects/${id}`, { method: 'DELETE' });
+            if (res.ok) loadDefects();
+        }
+
+        async function logout() {
+            await fetch('/logout');
+            window.location.reload();
+        }
+
+        window.onload = () => {
+            initChart();
+            connectWS();
+            loadDefects();
+
+            // Auto-Pilot Persistence
+            const isAuto = localStorage.getItem('autoPilot') === 'true';
+            autoPilot.checked = isAuto;
+            autoPilot.addEventListener('change', (e) => {
+                localStorage.setItem('autoPilot', e.target.checked);
+                _showAutoToast(e.target.checked ? "SYSTEM ARMED" : "SYSTEM STANDBY");
+            });
+        };
+    </script>
+</body>
+</html>

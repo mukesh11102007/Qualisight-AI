@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>QualiSight AI | Mobile CCTV Unit</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #06b6d4;
+            --danger: #f43f5e;
+            --bg: #020617;
+        }
+        
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            background: var(--bg); 
+            color: white; 
+            overflow: hidden; 
+            height: 100dvh;
+            width: 100vw;
+            margin: 0;
+            position: fixed;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        /* IMMERSIVE VIDEO */
+        #video-container {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background: black;
+        }
+        
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: contrast(1.1) brightness(0.9);
+        }
+
+        /* INDUSTRIAL HUD */
+        .hud-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: env(safe-area-inset-top) 1.5rem env(safe-area-inset-bottom) 1.5rem;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.5rem;
+        }
+
+        /* SCANNING EFFECT */
+        .scanner-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            box-shadow: 0 0 20px var(--primary);
+            z-index: 5;
+            display: none;
+        }
+        
+        .scanning .scanner-line {
+            display: block;
+            animation: scan 3s ease-in-out infinite alternate;
+        }
+        
+        @keyframes scan { from { top: 10%; } to { top: 90%; } }
+
+        /* CORNER BOXES */
+        .corner {
+            position: absolute;
+            width: 2rem;
+            height: 2rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        .tl { top: 20%; left: 10%; border-right: 0; border-bottom: 0; }
+        .tr { top: 20%; right: 10%; border-left: 0; border-bottom: 0; }
+        .bl { bottom: 20%; left: 10%; border-right: 0; border-top: 0; }
+        .br { bottom: 20%; right: 10%; border-left: 0; border-top: 0; }
+
+        .scanning .corner { border-color: var(--primary); border-width: 3px; }
+
+        /* BLINKING REC */
+        .rec-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--danger);
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 10px var(--danger);
+        }
+        .recording .rec-dot {
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* LOGS */
+        #log-container {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            max-height: 120px;
+            overflow-y: hidden;
+            mask-image: linear-gradient(to bottom, transparent, black 20%);
+        }
+
+        .btn-premium {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .btn-premium:active {
+            transform: scale(0.9);
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-start {
+            background: var(--primary);
+            color: var(--bg);
+            box-shadow: 0 0 30px rgba(6, 182, 212, 0.4);
+        }
+        
+        .btn-stop {
+            background: var(--danger);
+            color: white;
+            box-shadow: 0 0 30px rgba(244, 63, 94, 0.4);
+        }
+
+        /* UTILS */
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body class="recording">
+
+    <div id="video-container">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas" class="hidden"></canvas>
+        <div class="scanner-line"></div>
+        
+        <!-- FOCUS AREA -->
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+    </div>
+
+    <!-- HUD OVERLAY -->
+    <div class="hud-overlay">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-start mt-4">
+            <div class="glass-panel p-4 py-3 flex flex-col gap-1">
+                <div class="flex items-center text-[10px] font-bold tracking-[0.2em] uppercase text-cyan-400">
+                    <span class="rec-dot"></span> LIVE // REMOTE_UNIT_01
+                </div>
+                <div class="text-xs font-mono opacity-60" id="timestamp">2026.05.03 17:27:06</div>
+            </div>
+            
+            <button onclick="switchCamera()" class="btn-premium p-4 rounded-2xl pointer-events-auto">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M21 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M16 5V3a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"></path><path d="M7 12h10"></path><path d="M12 7v10"></path></svg>
+            </button>
+        </div>
+
+        <!-- Center Message -->
+        <div id="ai-status" class="flex flex-col items-center gap-2 opacity-0 transition-opacity duration-500">
+            <div class="bg-cyan-500/20 text-cyan-400 px-4 py-1 rounded-full text-[10px] font-bold tracking-[0.3em] uppercase border border-cyan-500/30">
+                AI Analysis Active
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mb-8 flex flex-col gap-6 pointer-events-auto">
+            
+            <!-- Real-time Logs -->
+            <div id="log-container" class="glass-panel p-4 flex flex-col gap-1">
+                <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 border-b border-white/5 pb-1">System Telemetry</div>
+                <div id="logs" class="flex flex-col gap-1">
+                    <div class="text-cyan-400">> [SYS] BOOTING_SEQUENCE_COMPLETE</div>
+                    <div class="text-slate-400">> [CAM] OPTICAL_SENSOR_READY</div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex items-center gap-4">
+                <button id="start-btn" class="flex-1 btn-premium btn-start py-5 rounded-[2rem] font-extrabold text-xs uppercase tracking-[0.2em]">
+                    Start Inspection
+                </button>
+                
+                <button id="alert-btn" class="btn-premium p-5 rounded-3xl bg-amber-500/10 border-amber-500/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const logs = document.getElementById('logs');
+        const startBtn = document.getElementById('start-btn');
+        const aiStatus = document.getElementById('ai-status');
+        const timestampEl = document.getElementById('timestamp');
+        const body = document.body;
+
+        const GEMINI_API_KEY = "AIzaSyDNmyebWIkM3c74aXZNgNuywhZYtFbjym4";
+        const MODEL_NAME = "gemini-1.5-flash"; 
+        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+
+        let isStreaming = false;
+        let streamInterval = null;
+        let aiInterval = null;
+        let currentFacingMode = 'environment';
+
+        function addLog(msg, color = "text-white") {
+            const div = document.createElement('div');
+            div.className = `${color} opacity-90`;
+            div.innerText = `> [${new Date().toLocaleTimeString()}] ${msg}`;
+            logs.appendChild(div);
+            if (logs.children.length > 6) logs.removeChild(logs.firstChild);
+            // Auto scroll to bottom
+            logs.parentElement.scrollTop = logs.parentElement.scrollHeight;
+        }
+
+        function speak(text) {
+            if (!window.speechSynthesis) return;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        async function initCamera() {
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: currentFacingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                video.srcObject = stream;
+                addLog("CAMERA_LINK_ESTABLISHED", "text-emerald-400");
+            } catch (err) {
+                addLog("CAMERA_ERROR: " + err.message, "text-red-400");
+            }
+        }
+
+        function switchCamera() {
+            currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+            initCamera();
+        }
+
+        async function sendFrame() {
+            if (!isStreaming) return;
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth / 2;
+            canvas.height = video.videoHeight / 2;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const base64 = canvas.toDataURL('image/jpeg', 0.4);
+            try {
+                await fetch('/v1/camera', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ zone: "Zone 1", image: base64 })
+                });
+            } catch (err) {}
+        }
+
+        async function runAI() {
+            if (!isStreaming) return;
+            
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth / 2;
+            canvas.height = video.videoHeight / 2;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const base64Content = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+
+            addLog("ANALYZING_FRAME...", "text-cyan-400");
+
+            const prompt = `Perform Industrial Quality Check:
+1. Is the primary object a standard ink pen? 
+   - Note: MECHANICAL PENCILS are NOT pens. If it is a mechanical pencil, respond 'NO_PEN_DETECTED'.
+   - If NO pen is detected, respond ONLY 'NO_PEN_DETECTED'.
+2. If it IS a valid pen, check for:
+   - Ink Leak (smudges/liquid on barrel): respond 'INK_LEAK'
+   - Missing Cap (exposed nib): respond 'CAP_MISSING'
+   - Damaged Tip: respond 'TIP_DAMAGED'
+   - Perfect condition: respond 'PEN_OK'
+Respond ONLY with one of the labels.`;
+
+            try {
+                const response = await fetch(GEMINI_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: prompt },
+                                { inline_data: { mime_type: "image/jpeg", data: base64Content } }
+                            ]
+                        }]
+                    })
+                });
+
+                const data = await response.json();
+                if (data.candidates && data.candidates[0]) {
+                    const result = data.candidates[0].content.parts[0].text.trim().toUpperCase();
+                    
+                    if (result === 'PEN_OK') {
+                        addLog("QUALITY_CHECK: PASSED (OK)", "text-emerald-400");
+                        speak("Quality check passed.");
+                    } else if (result === 'UNKNOWN') {
+                        addLog("STATUS: NO_OBJECT_DETECTED", "text-slate-400");
+                    } else {
+                        addLog(`DEFECT_DETECTED: ${result}`, "text-red-500 font-bold");
+                        speak(`Warning: ${result.replace('_', ' ')} detected.`);
+                        
+                        // Log to server gallery
+                        fetch('/api/defects', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                image: canvas.toDataURL('image/jpeg', 0.7), 
+                                message: result, 
+                                zone: "Zone 1" 
+                            })
+                        });
+
+                        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                    }
+                }
+            } catch (e) {
+                addLog("AI_ANALYSIS_FAILED", "text-red-400");
+            }
+        }
+
+        startBtn.onclick = () => {
+            isStreaming = !isStreaming;
+            
+            if (isStreaming) {
+                startBtn.innerText = "Stop Inspection";
+                startBtn.classList.replace('btn-start', 'btn-stop');
+                body.classList.add('scanning');
+                aiStatus.classList.remove('opacity-0');
+                addLog("INSPECTION_MODE_ACTIVE", "text-cyan-400");
+                
+                streamInterval = setInterval(sendFrame, 1000);
+                aiInterval = setInterval(runAI, 10000);
+                runAI();
+            } else {
+                startBtn.innerText = "Start Inspection";
+                startBtn.classList.replace('btn-stop', 'btn-start');
+                body.classList.remove('scanning');
+                aiStatus.classList.add('opacity-0');
+                addLog("SYSTEM_STANDBY", "text-slate-400");
+                
+                clearInterval(streamInterval);
+                clearInterval(aiInterval);
+            }
+        };
+
+        setInterval(() => {
+            const now = new Date();
+            timestampEl.innerText = `${now.getFullYear()}.${(now.getMonth()+1).toString().padStart(2,'0')}.${now.getDate().toString().padStart(2,'0')} ${now.toLocaleTimeString('en-GB')}`;
+        }, 1000);
+
+        initCamera();
+    </script>
+</body>
+</html>

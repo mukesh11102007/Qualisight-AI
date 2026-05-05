@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>QualiSight Pro | Industrial AI Scanner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            background: #f8fafc; 
+            color: #0f172a; 
+            overflow: hidden; 
+            height: 100dvh;
+            width: 100vw; 
+            position: fixed; 
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        
+        /* PREMIUM GLASS & CARDS */
+        .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(15, 23, 42, 0.05); border-radius: 2.5rem; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.05); }
+        .glass-btn { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(15, 23, 42, 0.1); border-radius: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        
+        video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        
+        /* INDUSTRIAL HUD */
+        .hud-container { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 5; pointer-events: none; }
+        .scanner-frame {
+            width: 85vw; height: 30vh; border: 1px solid rgba(15, 23, 42, 0.1); border-radius: 3.5rem;
+            position: relative; background: rgba(15, 23, 42, 0.02);
+        }
+        .scan-line {
+            position: absolute; width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, #0f172a, transparent);
+            box-shadow: 0 0 15px rgba(15, 23, 42, 0.3);
+            animation: scan-anim 4s ease-in-out infinite alternate;
+        }
+        @keyframes scan-anim { from { top: 15%; } to { top: 85%; } }
+
+        /* HUD CORNERS */
+        .corner { position: absolute; width: 32px; height: 32px; border: 3px solid #0f172a; transition: all 0.5s ease; }
+        .tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; border-radius: 2rem 0 0 0; }
+        .tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; border-radius: 0 2rem 0 0; }
+        .bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; border-radius: 0 0 0 2rem; }
+        .br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; border-radius: 0 0 2rem 0; }
+
+        .scanning .corner { border-color: #10b981; width: 40px; height: 40px; }
+        .scanning .scan-line { background: linear-gradient(90deg, transparent, #10b981, transparent); box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+
+        /* ANIMATIONS */
+        .pulse-emerald { animation: pulse-emerald 2s infinite; }
+        @keyframes pulse-emerald { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+        
+        .btn-active { transform: scale(0.95); opacity: 0.9; }
+    </style>
+</head>
+<body class="safe-area-inset">
+
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas" class="hidden"></canvas>
+
+    <!-- INDUSTRIAL HUD -->
+    <div class="hud-container">
+        <div class="scanner-frame" id="hud">
+            <div class="tl corner"></div><div class="tr corner"></div>
+            <div class="bl corner"></div><div class="br corner"></div>
+            <div class="scan-line"></div>
+        </div>
+    </div>
+
+    <!-- UI OVERLAY -->
+    <div class="relative z-10 h-[100dvh] w-full p-8 pb-[calc(env(safe-area-inset-bottom)+20px)] flex flex-col justify-between pointer-events-none">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-center pointer-events-auto">
+            <div class="glass-panel p-4 px-7 flex items-center gap-4">
+                <div class="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black italic text-lg shadow-lg">Q</div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-slate-900 leading-none">QualiSight <span class="text-slate-400 font-light">Pro</span></h1>
+                    <div class="flex items-center gap-2 mt-1.5">
+                        <div id="status-dot" class="w-2 h-2 rounded-full bg-slate-300"></div>
+                        <span id="zone-label" class="text-[9px] font-black tracking-widest text-slate-400 uppercase">OFFLINE // STANDBY</span>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="switchCamera()" class="glass-btn p-5 active:bg-slate-100 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Logs / Real-time Feedback -->
+        <div id="logs" class="flex flex-col gap-3 max-w-[260px]">
+            <!-- Inspection results will float here -->
+        </div>
+
+        <!-- Footer Controls -->
+        <div class="flex flex-col gap-8 pointer-events-auto">
+            <div class="flex gap-4">
+                <div class="flex-1 glass-panel p-4 px-6 flex flex-col">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Deployment Zone</span>
+                    <select id="zone-select" class="bg-transparent text-sm font-bold text-slate-900 outline-none cursor-pointer appearance-none">
+                        <option value="Zone 1">Zone 1 (Conveyor A)</option>
+                        <option value="Zone 2">Zone 2 (Assembly B)</option>
+                    </select>
+                </div>
+                <div class="glass-panel p-4 px-6 flex flex-col min-w-[120px] items-center">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Latency</span>
+                    <span id="latency" class="text-sm font-bold text-emerald-600 tracking-tighter italic">0.00ms</span>
+                </div>
+            </div>
+
+            <button id="start-btn" class="w-full py-6 bg-slate-900 text-white font-bold rounded-[2.5rem] text-sm uppercase tracking-[0.3em] shadow-[0_20px_40px_rgba(15,23,42,0.3)] transition-all hover:bg-slate-800 active:scale-95">
+                Initialize Neural Scan
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const logs = document.getElementById('logs');
+        const startBtn = document.getElementById('start-btn');
+        const zoneSelect = document.getElementById('zone-select');
+        const zoneLabel = document.getElementById('zone-label');
+        const statusDot = document.getElementById('status-dot');
+        const hud = document.getElementById('hud');
+
+        // Using correct model name: gemini-3.1-flash-lite-preview
+        const GEMINI_API_KEY = "AIzaSyAZlaRaCMLel2gM8aViiMJA8_oJniJbvF0";
+        const MODEL_NAME = "gemini-3.1-flash-lite-preview"; 
+        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+
+        let ws = null;
+        let isStreaming = false;
+        let currentFacingMode = 'environment';
+        let streamInterval = null;
+        let aiInterval = null;
+
+        function addLog(msg, type = "default") {
+            const div = document.createElement('div');
+            const colors = {
+                default: "bg-white/90 text-slate-900",
+                success: "bg-emerald-500 text-white",
+                warning: "bg-amber-500 text-white",
+                error: "bg-rose-500 text-white"
+            };
+            div.className = `${colors[type]} px-5 py-3 text-[11px] font-bold rounded-2xl shadow-lg border border-white/20 animate-in fade-in slide-in-from-left duration-500 w-fit backdrop-blur-md`;
+            div.innerHTML = `<span class="opacity-50 mr-2 font-mono">STATION_RPT:</span> ${msg}`;
+            logs.prepend(div);
+            if (logs.children.length > 3) logs.lastChild.remove();
+        }
+
+        async function initCamera() {
+            if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: currentFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } } 
+                });
+                video.srcObject = stream;
+                addLog("Optical Link Established", "default");
+            } catch (err) { addLog("Link Failed", "error"); }
+        }
+
+        function switchCamera() {
+            currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+            initCamera();
+        }
+
+        function connectWS() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}`);
+            ws.onopen = () => {
+                statusDot.className = "w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]";
+                zoneLabel.innerText = `SYS_SYNC // ${zoneSelect.value.toUpperCase()}`;
+            };
+            ws.onclose = () => {
+                statusDot.className = "w-2 h-2 rounded-full bg-slate-300";
+                setTimeout(connectWS, 2000);
+            };
+        }
+
+        async function sendFrame() {
+            if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) return;
+            const ctx = canvas.getContext('2d');
+            canvas.width = video.videoWidth / 2;
+            canvas.height = video.videoHeight / 2;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ws.send(JSON.stringify({ type: 'stream', zone: zoneSelect.value, image: canvas.toDataURL('image/jpeg', 0.4) }));
+        }
+
+        function speak(text) {
+            if (!window.speechSynthesis) return;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        async function runAI() {
+            if (!isStreaming) return;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+
+            addLog("NEURAL ANALYSIS IN PROGRESS...", "default");
+
+            // REFINED INDUSTRIAL PROMPT WITH MECHANICAL PENCIL SUPPORT
+            const prompt = `Perform Industrial Quality Check:
+1. Is the primary object a standard ink pen? 
+   - Note: MECHANICAL PENCILS are NOT pens. If it is a mechanical pencil, respond 'NO_PEN_DETECTED'.
+   - If NO pen is detected, respond ONLY 'NO_PEN_DETECTED'.
+2. If it IS a valid pen, check for:
+   - Ink Leak (smudges/liquid on barrel): respond 'INK_LEAK'
+   - Missing Cap (exposed nib): respond 'CAP_MISSING'
+   - Damaged Tip: respond 'TIP_DAMAGED'
+   - Perfect condition: respond 'PEN_OK'
+Respond ONLY with one of the labels.`;
+
+            try {
+                const start = performance.now();
+                const response = await fetch(GEMINI_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: base64 } }] }] })
+                });
+                
+                const data = await response.json();
+                const latency = (performance.now() - start).toFixed(0);
+                document.getElementById('latency').innerText = `${latency}ms`;
+
+                if (data.error) {
+                    addLog(`API_ERR: ${data.error.message.substring(0, 20)}...`, "error");
+                    return;
+                }
+
+                if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+                    const result = data.candidates[0].content.parts[0].text.trim().toUpperCase();
+                    const isOk = result.includes('OK');
+                    const isPencil = result.includes('MECHANICAL_PENCIL');
+                    
+                    if (isOk) {
+                        addLog("QUALITY CHECK: PASSED (OK)", "success");
+                        speak("Quality check passed. Pen is OK.");
+                    } else if (isPencil) {
+                        addLog("OBJECT ID: MECHANICAL PENCIL", "default");
+                        speak("Mechanical pencil detected.");
+                    } else {
+                        addLog(`DEFECT DETECTED: ${result}`, "error");
+                        speak(`Defect detected: ${result.replace('_', ' ')}`);
+                        fetch('/api/defects', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ image: canvas.toDataURL('image/jpeg', 0.6), message: result, zone: zoneSelect.value })
+                        });
+                        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                    }
+                } else {
+                    addLog("AI_LINK: NO_RESULT (Check Safety)", "warning");
+                }
+            } catch (e) { 
+                addLog("NEURAL_LINK_ERROR: NETWORK", "error");
+            }
+        }
+
+        startBtn.onclick = () => {
+            isStreaming = !isStreaming;
+            if (isStreaming) {
+                startBtn.innerText = "Terminate Scan";
+                startBtn.className = "w-full py-6 bg-rose-600 text-white font-bold rounded-[2.5rem] text-sm uppercase tracking-[0.3em] shadow-[0_20px_40px_rgba(225,29,72,0.3)] transition-all active:scale-95";
+                hud.classList.add('scanning');
+                streamInterval = setInterval(sendFrame, 150);
+                aiInterval = setInterval(runAI, 10000); // Set to 10 seconds as requested
+                runAI(); 
+            } else {
+                startBtn.innerText = "Initialize Neural Scan";
+                startBtn.className = "w-full py-6 bg-slate-900 text-white font-bold rounded-[2.5rem] text-sm uppercase tracking-[0.3em] shadow-[0_20px_40px_rgba(15,23,42,0.3)] transition-all active:scale-95";
+                hud.classList.remove('scanning');
+                clearInterval(streamInterval);
+                clearInterval(aiInterval);
+                addLog("System Standby", "default");
+            }
+        };
+
+        zoneSelect.onchange = () => { zoneLabel.innerText = `SYS_LINK // ${zoneSelect.value.toUpperCase()}`; };
+
+        connectWS();
+        initCamera();
+    </script>
+</body>
+</html>
+
