@@ -45,6 +45,12 @@ app.use(morgan('dev'));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname)));
 
+// --- REQUEST LOGGER ---
+app.use((req, res, next) => {
+    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+    next();
+});
+
 // --- HTTP BACKUP ROUTES ---
 app.post('/v1/camera', (req, res) => {
     const { zone, image } = req.body;
@@ -65,6 +71,12 @@ const defectSchema = new mongoose.Schema({
 const Defect = mongoose.model('Defect', defectSchema);
 
 // --- API ROUTES ---
+app.get('/api/config', (req, res) => {
+    res.status(200).json({
+        geminiApiKey: process.env.GEMINI_API_KEY
+    });
+});
+
 app.post('/api/defects', async (req, res) => {
     try {
         const { image, message, zone } = req.body;

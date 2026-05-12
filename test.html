@@ -130,10 +130,10 @@
         const statusDot = document.getElementById('status-dot');
         const hud = document.getElementById('hud');
 
-        // Using correct model name: gemini-3.1-flash-lite-preview
-        const GEMINI_API_KEY = "AIzaSyAZlaRaCMLel2gM8aViiMJA8_oJniJbvF0";
+        // Configuration will be fetched from the backend
+        let GEMINI_API_KEY = "";
         const MODEL_NAME = "gemini-3.1-flash-lite-preview"; 
-        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+        let GEMINI_URL = "";
 
         let ws = null;
         let isStreaming = false;
@@ -184,6 +184,18 @@
             };
         }
 
+        async function fetchConfig() {
+            try {
+                const res = await fetch('/api/config');
+                const data = await res.json();
+                GEMINI_API_KEY = data.geminiApiKey;
+                GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+                addLog("Neural Config Loaded", "success");
+            } catch (err) {
+                addLog("Config Load Failed", "error");
+            }
+        }
+
         async function sendFrame() {
             if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) return;
             const ctx = canvas.getContext('2d');
@@ -198,6 +210,7 @@
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.rate = 1.0;
             utterance.pitch = 1.0;
+            utterance.volume = 1.0; // Max volume
             window.speechSynthesis.speak(utterance);
         }
 
@@ -288,6 +301,7 @@ Respond ONLY with one of the labels.`;
 
         zoneSelect.onchange = () => { zoneLabel.innerText = `SYS_LINK // ${zoneSelect.value.toUpperCase()}`; };
 
+        fetchConfig();
         connectWS();
         initCamera();
     </script>

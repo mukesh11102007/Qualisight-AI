@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:image/image.dart' as img;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'role_selection.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +31,7 @@ void main() async {
           brightness: Brightness.dark,
         ),
       ),
-      home: CameraScreen(camera: selectedCamera),
+      home: const RoleSelectionScreen(),
     ),
   );
 }
@@ -52,10 +55,11 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
   String _status = "STANDBY";
   Timer? _streamTimer;
   Timer? _analysisTimer;
+  late FlutterTts _tts;
   
   String selectedZone = "Zone 1";
   String serverIp = "iciness-praising-public.ngrok-free.dev"; 
-  final String geminiApiKey = "AIzaSyDNmyebWIkM3c74aXZNgNuywhZYtFbjym4";
+  final String geminiApiKey = "AIzaSyCTwHW46tV0mHX3JKuNY-Ws7MWc217zDvw";
 
   String get baseUrl {
     String trimmed = serverIp.trim();
@@ -77,13 +81,14 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
   }
   
   // Updated to v1beta which is more stable for flash models
-  String get geminiUrl => "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$geminiApiKey";
+  String get geminiUrl => "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=$geminiApiKey";
 
   final List<Map<String, dynamic>> _logs = [];
 
   @override
   void initState() {
     super.initState();
+    _loadServerIp();
     _controller = CameraController(
       widget.camera,
       ResolutionPreset.medium,
@@ -94,6 +99,32 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
+    _initTTS();
+  }
+
+  void _initTTS() {
+    _tts = FlutterTts();
+    _tts.setLanguage("en-US");
+    _tts.setSpeechRate(0.5);
+    _tts.setPitch(1.0);
+    _tts.setVolume(1.0); // Maximum volume
+  }
+
+  Future<void> _speak(String text) async {
+    await _tts.speak(text);
+  }
+
+  Future<void> _loadServerIp() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      serverIp = prefs.getString('serverIp') ?? "iciness-praising-public.ngrok-free.dev";
+    });
+  }
+
+  Future<void> _saveServerIp(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('serverIp', value);
+    setState(() => serverIp = value);
   }
 
   @override
@@ -158,11 +189,16 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
       List<int> compressed = img.encodeJpg(decoded, quality: 40);
       String dataUrl = "data:image/jpeg;base64,${base64Encode(compressed)}";
 
-      await http.post(
+      debugPrint("UPLOADING_TO: $baseUrl/v1/camera");
+      final resp = await http.post(
         Uri.parse("$baseUrl/v1/camera"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"zone": selectedZone, "image": dataUrl}),
       ).timeout(const Duration(seconds: 5));
+
+      if (resp.statusCode != 200) {
+        debugPrint("SERVER_ERROR: ${resp.statusCode} - ${resp.body}");
+      }
     } catch (e) {
       debugPrint("Stream error: $e");
     }
@@ -212,10 +248,12 @@ Respond ONLY with one of the labels.""";
         
         if (result == "PEN_OK") {
           _addLog("QUALITY: PASSED (OK)", color: Colors.greenAccent);
+          _speak("Quality check passed.");
         } else if (result == "UNKNOWN") {
           _addLog("STATUS: NO_OBJECT", color: Colors.white30);
         } else {
           _addLog("DEFECT: $result", color: Colors.redAccent);
+          _speak("Warning: ${result.replaceAll('_', ' ')} detected.");
           http.post(
             Uri.parse("$baseUrl/api/defects"),
             headers: {"Content-Type": "application/json"},
@@ -293,6 +331,30 @@ Respond ONLY with one of the labels.""";
     );
   }
 
+  void _showSettings() {
+    final controller = TextEditingController(text: serverIp);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Server Settings'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Ngrok Host or IP'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              _saveServerIp(controller.text);
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 60, 20, 0),
@@ -334,18 +396,28 @@ Respond ONLY with one of the labels.""";
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      DateFormat('yyyy.MM.dd HH:mm:ss').format(DateTime.now()),
-                      style: const TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace'),
+                      serverIp.split('.').first.toUpperCase(),
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
             ),
           ),
-          IconButton(
-            onPressed: _showSettings,
-            icon: const Icon(Icons.settings_outlined, color: Colors.white70),
-            style: IconButton.styleFrom(backgroundColor: Colors.black26),
+          Row(
+            children: [
+              IconButton(
+                onPressed: _showSettings,
+                icon: const Icon(Icons.settings, color: Colors.white70),
+                style: IconButton.styleFrom(backgroundColor: Colors.black26),
+              ),
+              const SizedBox(width: 10),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close, color: Colors.white70),
+                style: IconButton.styleFrom(backgroundColor: Colors.black26),
+              ),
+            ],
           ),
         ],
       ),
@@ -496,39 +568,6 @@ Respond ONLY with one of the labels.""";
     );
   }
 
-  void _showSettings() {
-    final controller = TextEditingController(text: serverIp);
-    showDialog(
-      context: context,
-      builder: (context) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: AlertDialog(
-          backgroundColor: Colors.grey[900],
-          title: const Text("Station Config", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              labelText: "Remote Server IP",
-              labelStyle: TextStyle(color: Colors.white38),
-              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white10)),
-            ),
-            style: const TextStyle(color: Colors.white),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL", style: TextStyle(color: Colors.white38))),
-            ElevatedButton(
-              onPressed: () {
-                setState(() => serverIp = controller.text.trim());
-                _addLog("SYSTEM: REMOTE_HOST_UPDATED");
-                Navigator.pop(context);
-              },
-              child: const Text("APPLY"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class HUDPainter extends CustomPainter {
