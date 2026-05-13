@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 import 'utils.dart';
 
 class AdminDashboard extends StatefulWidget {
@@ -19,6 +19,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
   List<Map<String, dynamic>> _defects = [];
   bool _autoPilot = false;
   String _serverIp = "iciness-praising-public.ngrok-free.dev";
+  String _maintenanceStatus = "SYSTEM_HEALTHY";
+  int _performanceIndex = 100;
+  String _aiInsight = "Calibrating Neural Engine...";
+  Timer? _analyticsTimer;
 
   String get _baseUrl {
     String host = _serverIp.trim().replaceAll("https://", "").replaceAll("http://", "");
@@ -33,6 +37,30 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _loadSettings().then((_) {
       _connectWebSocket();
       _loadDefects();
+      _startAnalyticsLoop();
+    });
+  }
+
+  void _startAnalyticsLoop() {
+    _analyticsTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      try {
+        final resp = await http.get(Uri.parse('$_baseUrl/api/analytics'));
+        if (resp.statusCode == 200) {
+          final data = jsonDecode(resp.body);
+          setState(() {
+            _maintenanceStatus = data['maintenanceStatus'];
+            _performanceIndex = data['performanceIndex'];
+          });
+        }
+
+        final insightResp = await http.get(Uri.parse('$_baseUrl/api/analytics/insights'));
+        if (insightResp.statusCode == 200) {
+          final data = jsonDecode(insightResp.body);
+          setState(() {
+            _aiInsight = data['insight'];
+          });
+        }
+      } catch (e) {}
     });
   }
 
@@ -120,13 +148,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
         final json = jsonDecode(resp.body);
         setState(() => _defects = List<Map<String, dynamic>>.from(json['data']));
       }
-    } catch (e) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to connect to backend: $_baseUrl/api/defects'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     _channel.sink.close();
     _tts.stop();
+    _analyticsTimer?.cancel();
     super.dispose();
   }
 
@@ -222,9 +257,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                       Row(
                         children: [
-                          _StatCard(label: 'TOTAL DEFECTS', value: _defects.length.toString()),
+                          if (_maintenanceStatus == "MAINTENANCE_REQUIRED")
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              margin: const EdgeInsets.only(right: 16),
+                              decoration: BoxDecoration(
+                                  color: Colors.amber.shade50,
+                                  border: Border.all(color: Colors.amber.shade200),
+                                  borderRadius: BorderRadius.circular(12)),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.build, size: 14, color: Colors.amber.shade800),
+                                  const SizedBox(width: 8),
+                                  Text("MAINTENANCE REQ.",
+                                      style: TextStyle(
+                                          fontSize: 10, fontWeight: FontWeight.black, color: Colors.amber.shade800)),
+                                ],
+                              ),
+                            ),
+                          _StatCard(label: 'PERFORMANCE', value: '$_performanceIndex%'),
                           const SizedBox(width: 16),
-                          const _StatCard(label: 'AI VOICE', value: 'ACTIVE', isStatus: true),
+                          _StatCard(label: 'TOTAL DEFECTS', value: _defects.length.toString()),
                         ],
                       ),
                     ],
@@ -245,6 +298,38 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         const Align(
                           alignment: Alignment.topRight,
                           child: Text('FACTORY PERFORMANCE INDEX', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 1.2)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // AI Neural Insight Banner
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFF0F172A), Color(0xFF1E293B)]),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [BoxShadow(color: Colors.indigo.withOpacity(0.2), blurRadius: 20)],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(color: Colors.indigo.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                          child: const Icon(Icons.bolt, color: Colors.indigoAccent, size: 28),
+                        ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('NEURAL INSIGHT ENGINE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.indigoAccent, letterSpacing: 2)),
+                              const SizedBox(height: 4),
+                              Text(_aiInsight, style: const TextStyle(fontSize: 13, color: Colors.white, fontStyle: FontStyle.italic, fontWeight: FontWeight.w500)),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -354,10 +439,41 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _StreamBox extends StatelessWidget {
+class _StreamBox extends StatefulWidget {
   final String label;
   final Stream stream;
   const _StreamBox({required this.label, required this.stream});
+
+  @override
+  State<_StreamBox> createState() => _StreamBoxState();
+}
+
+class _StreamBoxState extends State<_StreamBox> {
+  String? _lastFrame;
+  late StreamSubscription _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = widget.stream.listen((raw) {
+      try {
+        final data = jsonDecode(raw as String);
+        if (data['type'] == 'stream' && data['zone'] == widget.label) {
+          if (mounted) {
+            setState(() {
+              _lastFrame = data['image'];
+            });
+          }
+        }
+      } catch (e) {}
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -366,12 +482,12 @@ class _StreamBox extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+            Text(widget.label, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
-              child: const Text('ONLINE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: const Color(0xFF10B981))),
+              child: const Text('ONLINE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF10B981))),
             ),
           ],
         ),
@@ -385,30 +501,23 @@ class _StreamBox extends StatelessWidget {
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
             ),
             clipBehavior: Clip.antiAlias,
-            child: StreamBuilder(
-              stream: stream,
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  try {
-                    final data = jsonDecode(snapshot.data as String);
-                    if (data['type'] == 'stream' && data['zone'] == label) {
-                      final imgData = (data['image'] as String).split(',')[1];
-                      return Image.memory(base64Decode(imgData), fit: BoxFit.cover);
-                    }
-                  } catch (e) {}
-                }
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      const SizedBox(height: 12),
-                      Text('INITIALIZING...', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade500, letterSpacing: 1.2)),
-                    ],
+            child: _lastFrame != null
+                ? Image.memory(
+                    base64Decode(_lastFrame!.split(',')[1]),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        const SizedBox(height: 12),
+                        Text('INITIALIZING...',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade500, letterSpacing: 1.2)),
+                      ],
+                    ),
                   ),
-                );
-              },
-            ),
           ),
         ),
       ],

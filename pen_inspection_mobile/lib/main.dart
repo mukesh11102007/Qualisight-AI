@@ -59,7 +59,7 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
   
   String selectedZone = "Zone 1";
   String serverIp = "iciness-praising-public.ngrok-free.dev"; 
-  final String geminiApiKey = "AIzaSyCTwHW46tV0mHX3JKuNY-Ws7MWc217zDvw";
+  final String geminiApiKey = "AIzaSyDSkGxh6c0wd-kYViYlt56PNwY_zro2L9s";
 
   String get baseUrl {
     String trimmed = serverIp.trim();
@@ -157,7 +157,7 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
       _addLog("SYSTEM: SCANNING_MODE_ACTIVE", color: Colors.cyanAccent);
       _status = "ACTIVE // $selectedZone";
       
-      _streamTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+      _streamTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
         if (!_isStreaming) return;
         await _uploadFrame();
       });
@@ -186,7 +186,8 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
       
       img.Image? decoded = img.decodeImage(bytes);
       if (decoded == null) return;
-      List<int> compressed = img.encodeJpg(decoded, quality: 40);
+      // Lower quality for faster live feed
+      List<int> compressed = img.encodeJpg(decoded, quality: 25); 
       String dataUrl = "data:image/jpeg;base64,${base64Encode(compressed)}";
 
       debugPrint("UPLOADING_TO: $baseUrl/v1/camera");
@@ -197,7 +198,8 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
       ).timeout(const Duration(seconds: 5));
 
       if (resp.statusCode != 200) {
-        debugPrint("SERVER_ERROR: ${resp.statusCode} - ${resp.body}");
+        _addLog("ERR_${resp.statusCode}: Link check failed", color: Colors.redAccent);
+        debugPrint("SERVER_ERROR [${resp.statusCode}] at: $baseUrl/v1/camera");
       }
     } catch (e) {
       debugPrint("Stream error: $e");
@@ -213,7 +215,8 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
       final bytes = await image.readAsBytes();
       img.Image? decoded = img.decodeImage(bytes);
       if (decoded == null) return;
-      List<int> compressed = img.encodeJpg(decoded, quality: 50);
+      // Medium quality for AI analysis
+      List<int> compressed = img.encodeJpg(decoded, quality: 45); 
       String base64Content = base64Encode(compressed);
 
       const prompt = """Perform Industrial Quality Check:
@@ -223,7 +226,7 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
 2. If it IS a valid pen, check for:
    - Ink Leak (smudges/liquid on barrel): respond 'INK_LEAK'
    - Missing Cap (exposed nib): respond 'CAP_MISSING'
-   - Damaged Tip: respond 'TIP_DAMAGED'
+   - Damaged/Broken Pen (cracked barrel, bent body, snapped tip): respond 'PEN_DAMAGED'
    - Perfect condition: respond 'PEN_OK'
 Respond ONLY with one of the labels.""";
 
@@ -240,7 +243,7 @@ Respond ONLY with one of the labels.""";
             }
           ]
         }),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

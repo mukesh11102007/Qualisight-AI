@@ -283,7 +283,7 @@
         const timestampEl = document.getElementById('timestamp');
         const body = document.body;
 
-        let GEMINI_API_KEY = "AIzaSyCTwHW46tV0mHX3JKuNY-Ws7MWc217zDvw";
+        let GEMINI_API_KEY = "AIzaSyDSkGxh6c0wd-kYViYlt56PNwY_zro2L9s";
         const MODEL_NAME = "gemini-3.1-flash-lite-preview";
         let GEMINI_URL = "";
 
@@ -381,7 +381,7 @@
 2. If it IS a valid pen, check for:
    - Ink Leak (smudges/liquid on barrel): respond 'INK_LEAK'
    - Missing Cap (exposed nib): respond 'CAP_MISSING'
-   - Damaged Tip: respond 'TIP_DAMAGED'
+   - Damaged/Broken Pen (cracked barrel, bent body, snapped tip): respond 'PEN_DAMAGED'
    - Perfect condition: respond 'PEN_OK'
 Respond ONLY with one of the labels.`;
 

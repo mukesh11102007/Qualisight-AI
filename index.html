@@ -15,6 +15,14 @@
         .stream-box { background: #0f172a; border-radius: 30px; overflow: hidden; position: relative; aspect-ratio: 16/9; }
         .pulse { animation: pulse 2s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        
+        /* Digital Twin Animation */
+        .twin-active { fill: #ef4444 !important; filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.5)); transition: all 0.5s; }
+        .twin-idle { fill: #e2e8f0; transition: all 0.5s; }
+        
+        .insight-card { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; border: none; }
+        .neural-glow { box-shadow: 0 0 20px rgba(99, 102, 241, 0.15); }
+        
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         
@@ -39,6 +47,16 @@
             </div>
         </div>
 
+        <!-- Factory Selector -->
+        <div class="flex flex-col gap-2">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-2">Location Hub</span>
+            <select class="card p-3 text-xs font-bold text-slate-700 appearance-none bg-slate-50 cursor-pointer outline-none">
+                <option>CHENNAI_PLANT_01</option>
+                <option>BANGALORE_HUB_04</option>
+                <option>MUMBAI_ZONE_02</option>
+            </select>
+        </div>
+
         <div class="flex flex-col gap-6">
             <div class="flex flex-col gap-2">
                 <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-2">Autonomous Mode</span>
@@ -60,6 +78,10 @@
                 <a href="/test.html" target="_blank" class="flex items-center gap-3 text-slate-500 hover:text-slate-900 p-3 rounded-xl transition-all text-sm font-medium">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     Remote Units
+                </a>
+                <a href="#" onclick="generateReport()" class="flex items-center gap-3 text-slate-500 hover:text-indigo-600 p-3 rounded-xl transition-all text-sm font-bold border border-dashed border-slate-200 mt-4 bg-slate-50/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    Export shift Report
                 </a>
             </nav>
         </div>
@@ -92,13 +114,63 @@
                         <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse"></div> ACTIVE
                     </span>
                 </div>
+                <div id="maintenance-alert" class="card px-6 py-4 flex-col bg-amber-50 border-amber-200 hidden">
+                    <span class="text-[9px] font-bold uppercase text-amber-600 tracking-widest mb-1">Predictive Alert</span>
+                    <span class="text-amber-700 font-black text-[10px] animate-pulse">🔧 MAINTENANCE REQ.</span>
+                </div>
             </div>
         </div>
 
-        <!-- Live Chart -->
-        <div class="card p-8 h-56 relative bg-white overflow-hidden">
-            <canvas id="qualityChart"></canvas>
-            <div class="absolute top-6 right-8 text-[10px] font-black uppercase tracking-widest text-slate-300">Factory Performance Index</div>
+        <!-- Live Chart & AI Insight Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            <div class="card p-8 h-64 lg:col-span-2 relative bg-white overflow-hidden">
+                <canvas id="qualityChart"></canvas>
+                <div class="absolute top-6 right-8 text-[10px] font-black uppercase tracking-widest text-slate-300">Factory Performance Index</div>
+            </div>
+            
+            <!-- Digital Twin Factory Map -->
+            <div class="card p-6 flex flex-col gap-4 bg-white relative overflow-hidden">
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Digital Twin [LIVE]</span>
+                <div class="flex-1 flex items-center justify-center p-4">
+                    <svg viewBox="0 0 200 100" class="w-full h-full">
+                        <!-- Conveyor Belt -->
+                        <rect x="10" y="40" width="180" height="20" rx="10" fill="#f1f5f9" />
+                        <!-- Zone 1 -->
+                        <rect id="twin-1" x="30" y="30" width="40" height="40" rx="8" class="twin-idle" />
+                        <text x="50" y="55" text-anchor="middle" font-size="6" font-weight="bold" fill="#94a3b8">Z1</text>
+                        <!-- Zone 2 -->
+                        <rect id="twin-2" x="130" y="30" width="40" height="40" rx="8" class="twin-idle" />
+                        <text x="150" y="55" text-anchor="middle" font-size="6" font-weight="bold" fill="#94a3b8">Z2</text>
+                        <!-- Sensors -->
+                        <circle cx="50" cy="20" r="2" fill="#cbd5e1" />
+                        <circle cx="150" cy="20" r="2" fill="#cbd5e1" />
+                        <path d="M50 22 L50 30" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="2 1" />
+                        <path d="M150 22 L150 30" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="2 1" />
+                    </svg>
+                </div>
+                <div class="text-[9px] text-center font-bold text-slate-400">FACTORY_FLOOR_B_UNIT_04</div>
+            </div>
+        </div>
+
+        <!-- AI Neural Insight Banner -->
+        <div class="card insight-card p-8 flex flex-col lg:flex-row items-center gap-8 neural-glow border-l-4 border-indigo-500">
+            <div class="w-16 h-16 bg-indigo-500/20 rounded-2xl flex items-center justify-center shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-indigo-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+            </div>
+            <div class="flex-1 text-center lg:text-left">
+                <h4 class="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 mb-2">Neural Insight Engine</h4>
+                <p id="ai-insight-text" class="text-sm font-medium text-slate-300 leading-relaxed italic">
+                    AI is currently aggregating shift data and analyzing production patterns...
+                </p>
+            </div>
+            <div class="shrink-0 flex flex-col items-end gap-1">
+                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Processing Load</span>
+                <div class="w-32 h-1 bg-slate-800 rounded-full overflow-hidden">
+                    <div class="h-full bg-indigo-500 animate-[loading_3s_infinite]" style="width: 65%;"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Streams Grid -->
@@ -212,6 +284,19 @@
                         status.innerText = "ONLINE";
                         status.className = "text-[8px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase pulse";
                     }
+                    
+                    // Update Digital Twin
+                    const twinId = data.zone === 'Zone 1' ? 'twin-1' : 'twin-2';
+                    const twin = document.getElementById(twinId);
+                    if (twin) {
+                        twin.classList.remove('twin-idle');
+                        twin.classList.add('twin-active');
+                        setTimeout(() => {
+                            twin.classList.remove('twin-active');
+                            twin.classList.add('twin-idle');
+                        }, 1000);
+                    }
+
                     updateChart(false);
                 }
                 if (data.type === 'defect') { 
@@ -317,7 +402,101 @@
                 localStorage.setItem('autoPilot', e.target.checked);
                 _showAutoToast(e.target.checked ? "SYSTEM ARMED" : "SYSTEM STANDBY");
             });
+
+            // Analytics Loop
+            setInterval(async () => {
+                try {
+                    const res = await fetch('/api/analytics');
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        const alert = document.getElementById('maintenance-alert');
+                        if (data.maintenanceStatus === 'MAINTENANCE_REQUIRED') {
+                            alert.classList.remove('hidden');
+                            alert.classList.add('flex');
+                        } else {
+                            alert.classList.add('hidden');
+                            alert.classList.remove('flex');
+                        }
+                        const val = data.performanceIndex;
+                        qualityChart.data.datasets[0].data.shift();
+                        qualityChart.data.datasets[0].data.push(val);
+                        qualityChart.update();
+                    }
+
+                    // Fetch AI Insights
+                    const insightRes = await fetch('/api/analytics/insights');
+                    const insightData = await insightRes.json();
+                    if (insightData.status === 'success') {
+                        document.getElementById('ai-insight-text').innerText = insightData.insight;
+                    }
+                } catch (e) { }
+            }, 10000); // 10s refresh for analytics and AI
         };
+
+        function generateReport() {
+            const btn = event.currentTarget;
+            const originalContent = btn.innerHTML;
+            btn.innerText = "GENERATING PDF...";
+            window.location.href = '/api/report';
+            setTimeout(() => {
+                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg> SHIFT_REPORT.PDF`;
+                btn.classList.add('text-emerald-600', 'border-emerald-200', 'bg-emerald-50');
+                _showAutoToast("REPORT READY FOR DOWNLOAD");
+            }, 2000);
+        }
+
+        // --- HIGH-END VOICE COMMAND SYSTEM ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.lang = 'en-US';
+            
+            recognition.onresult = (event) => {
+                const command = event.results[event.results.length - 1][0].transcript.toLowerCase();
+                console.log("Voice Command:", command);
+                
+                if (command.includes("report")) {
+                    _showAutoToast("Voice CMD: Generating Report...");
+                    window.location.href = '/api/report';
+                } else if (command.includes("status")) {
+                    const health = qualityChart.data.datasets[0].data.slice(-1)[0];
+                    speak(`System health is at ${health} percent.`);
+                } else if (command.includes("dispatch")) {
+                    const zone = (command.includes("one") || command.includes("1")) ? "Zone 1" : 
+                                 ((command.includes("two") || command.includes("2")) ? "Zone 2" : null);
+                    
+                    if (zone) {
+                        _showAutoToast(`Voice CMD: Dispatching ${zone}...`);
+                        // Find latest defect for this zone from the backend
+                        fetch('/api/defects')
+                            .then(r => r.json())
+                            .then(res => {
+                                const latest = res.data.find(d => d.zone === zone);
+                                if (latest) {
+                                    fetch('/api/alerts/send', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(latest)
+                                    }).then(() => {
+                                        speak(`Alert dispatched for ${zone}.`);
+                                        _showAutoToast(`DISPATCHED: ${zone} ALERT SENT`);
+                                    });
+                                } else {
+                                    speak(`No recent defects found for ${zone}.`);
+                                }
+                            });
+                    }
+                } else if (command.includes("help")) {
+                    speak("You can say 'Report', 'Status', or 'Dispatch Zone 1' to control the system.");
+                }
+            };
+            
+            // Start listening automatically after user interaction
+            document.body.addEventListener('click', () => {
+                try { recognition.start(); } catch(e) {}
+            }, { once: true });
+        }
     </script>
 </body>
 </html>
