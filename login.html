@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QualiSight AI | Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <style>
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            background: #020617; 
+            color: white; 
+            height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            overflow: hidden; 
+        }
+        .glass { 
+            background: rgba(255, 255, 255, 0.03); 
+            backdrop-filter: blur(20px); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            border-radius: 2rem; 
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); 
+        }
+        .input-glass { 
+            background: rgba(255, 255, 255, 0.05); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            border-radius: 1rem; 
+            color: white; 
+            transition: all 0.3s; 
+        }
+        .input-glass:focus { 
+            border-color: #6366f1; 
+            background: rgba(255, 255, 255, 0.1); 
+            outline: none; 
+        }
+        .gradient-text { 
+            background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+        }
+        .orb {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            z-index: -1;
+            filter: blur(40px);
+        }
+    </style>
+</head>
+<body>
+    <div class="orb top-[-10%] left-[-10%] animate-pulse"></div>
+    <div class="orb bottom-[-10%] right-[-10%] animate-pulse" style="animation-delay: 2s"></div>
+
+    <div class="glass w-full max-w-md p-10 flex flex-col gap-8 animate-in fade-in zoom-in duration-700">
+        <div class="flex flex-col items-center gap-6 mb-10">
+            <img src="/logo.png" class="w-16 h-16 object-contain rounded-2xl shadow-xl border border-white/20" alt="QualiSight Logo">
+            <div class="text-center">
+                <h1 class="text-3xl font-black tracking-tight text-white">QualiSight</h1>
+                <p class="text-[10px] font-bold uppercase tracking-[0.4em] text-indigo-300 mt-2">Enterprise Access</p>
+            </div>
+        </div>
+
+        <form id="login-form" class="flex flex-col gap-6">
+            <div class="flex flex-col gap-2">
+                <label class="text-[10px] font-bold uppercase tracking-widest text-slate-500 px-1">Command Identity</label>
+                <input type="text" id="username" placeholder="Enter username" class="input-glass p-4 text-sm" required>
+            </div>
+            <div class="flex flex-col gap-2">
+                <label class="text-[10px] font-bold uppercase tracking-widest text-slate-500 px-1">Access Protocol</label>
+                <input type="password" id="password" placeholder="••••••••" class="input-glass p-4 text-sm" required>
+            </div>
+
+            <button type="submit" id="submit-btn" class="mt-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-indigo-500/20 active:scale-95 uppercase text-xs tracking-widest">
+                Authorize Access
+            </button>
+        </form>
+
+        <div id="error-msg" class="text-rose-400 text-xs font-bold text-center hidden animate-bounce">
+            Invalid identity or access protocol.
+        </div>
+
+        <p class="text-center text-[10px] text-slate-600 font-bold uppercase tracking-widest mt-4">
+            System Security Level: Tier 1 Industrial
+        </p>
+    </div>
+
+    <script>
+        const form = document.getElementById('login-form');
+        const errorMsg = document.getElementById('error-msg');
+        const submitBtn = document.getElementById('submit-btn');
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            submitBtn.innerText = "AUTHENTICATING...";
+            submitBtn.disabled = true;
+            errorMsg.classList.add('hidden');
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    window.location.href = data.redirectUrl || '/dashboard.html';
+                } else {
+                    errorMsg.classList.remove('hidden');
+                    submitBtn.innerText = "AUTHORIZE ACCESS";
+                    submitBtn.disabled = false;
+                }
+            } catch (err) {
+                errorMsg.innerText = "Connection link severed.";
+                errorMsg.classList.remove('hidden');
+                submitBtn.innerText = "AUTHORIZE ACCESS";
+                submitBtn.disabled = false;
+            }
+        };
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+            });
+        }
+    </script>
+</body>
+</html>

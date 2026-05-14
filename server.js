@@ -10,9 +10,46 @@ const WebSocket = require('ws');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+// --- GEMINI MULTI-KEY ROTATION LOGIC ---
+const apiKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || "").split(',').filter(k => k.trim());
+let currentKeyIndex = 0;
+
+function getNextModel(modelName = "gemini-3.1-flash-lite-preview") {
+    const key = apiKeys[currentKeyIndex];
+    const genAI = new GoogleGenerativeAI(key);
+    return genAI.getGenerativeModel({ model: modelName });
+}
+
+async function safeGenerateContent(prompt, modelName = "gemini-3.1-flash-lite-preview", imageConfig = null) {
+    let lastError;
+    const maxTries = apiKeys.length;
+
+    for (let i = 0; i < maxTries; i++) {
+        try {
+            const model = getNextModel(modelName);
+            const content = imageConfig ? [prompt, imageConfig] : prompt;
+            const result = await model.generateContent(content);
+            const response = await result.response;
+            return response.text();
+        } catch (error) {
+            lastError = error;
+            console.error(`[AI] Error with Key ${currentKeyIndex + 1}:`, error.message);
+
+            // Rotate if forbidden (leaked) or too many requests
+            if (error.status === 403 || error.status === 429) {
+                console.log(`[AI] Rotating to next API key...`);
+                currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+            } else {
+                throw error; // Other errors should be handled by caller
+            }
+        }
+    }
+    throw lastError;
+}
+
 
 const app = express();
 const server = require('http').createServer(app);
@@ -20,8 +57,10 @@ const wss = new WebSocket.Server({ server });
 
 // Live Stream In-Memory Storage (Multiple Zones)
 let zones = {
-    "Zone 1": null,
-    "Zone 2": null
+    "Chennai Unit 1": null,
+    "Chennai Unit 2": null,
+    "Global Unit 1": null,
+    "Global Unit 2": null
 };
 
 // WebSocket Broadcast Logic
@@ -54,7 +93,13 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(morgan('dev'));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname)));
+
+// --- ROOT ENTRY POINT (MUST BE BEFORE STATIC) ---
+app.get('/', (req, res) => {
+    res.redirect('/login.html');
+});
+
+app.use(express.static(path.join(__dirname), { index: false }));
 
 // --- HEALTH CHECK ---
 app.get('/api/health', (req, res) => {
@@ -84,17 +129,85 @@ app.get('/v1/camera', (req, res) => {
 const defectSchema = new mongoose.Schema({
     image: String,
     message: String,
-    zone: { type: String, default: "Zone 1" },
+    zone: { type: String, default: "Chennai Unit 1" },
     timestamp: { type: Date, default: Date.now }
 });
 const Defect = mongoose.model('Defect', defectSchema);
 
-// --- API ROUTES ---
-app.get('/api/config', (req, res) => {
-    res.status(200).json({
-        geminiApiKey: process.env.GEMINI_API_KEY
-    });
+const userSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true }
 });
+const User = mongoose.model('User', userSchema);
+
+// --- AUTH MIDDLEWARE ---
+const protect = async (req, res, next) => {
+    try {
+        const token = req.cookies.jwt;
+        if (!token) return res.status(401).redirect('/login.html');
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+        const user = await User.findById(decoded.id);
+        if (!user) return res.status(401).redirect('/login.html');
+
+        req.user = user;
+        next();
+    } catch (err) {
+        res.status(401).redirect('/login.html');
+    }
+};
+
+// --- AUTH ROUTES ---
+app.post('/api/auth/login', async (req, res) => {
+    console.log(`[AUTH] Login attempt for user: ${req.body.username}`);
+    const { username, password } = req.body;
+    const user = await User.findOne({ username });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+        console.log(`[AUTH] Login failed for user: ${username}`);
+        return res.status(401).json({ status: 'fail', message: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+    res.cookie('jwt', token, { 
+        httpOnly: true, 
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+    });
+    
+    // Role-based redirection
+    let redirectUrl = '/dashboard.html';
+    if (username === 'inspect') redirectUrl = '/test.html';
+    
+    console.log(`[AUTH] Login successful for user: ${username}, redirecting to ${redirectUrl}`);
+    res.status(200).json({ status: 'success', redirectUrl });
+});
+
+app.get('/logout', (req, res) => {
+    res.clearCookie('jwt');
+    res.redirect('/login.html');
+});
+
+// --- AI INSPECTION PROXY (SECURE & ROTATING) ---
+app.post('/api/ai/inspect', async (req, res) => {
+    try {
+        const { image, prompt } = req.body;
+        if (!image) return res.status(400).json({ status: 'fail', message: 'No image provided' });
+
+        const base64Data = image.includes(',') ? image.split(',')[1] : image;
+        const text = await safeGenerateContent(
+            prompt || "Perform Industrial Quality Check",
+            "gemini-3.1-flash-lite-preview",
+            { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+        );
+
+        res.status(200).json({ status: 'success', result: text });
+    } catch (err) {
+        console.error("AI Inspection Error:", err);
+        res.status(500).json({ status: 'fail', message: "AI analysis failed after multiple attempts" });
+    }
+});
+
+
 
 app.post('/api/defects', async (req, res) => {
     try {
@@ -131,7 +244,7 @@ app.get('/api/analytics', async (req, res) => {
     } catch (err) { res.status(500).json({ status: 'fail' }); }
 });
 
-// --- AI NEURAL INSIGHTS ---
+// --- AI NEURAL INSIGHTS (ROTATING) ---
 app.get('/api/analytics/insights', async (req, res) => {
     try {
         const recentDefects = await Defect.find().sort('-timestamp').limit(15);
@@ -147,31 +260,14 @@ ${defectLog}
 
 Response Format: One sentence on the trend, one sentence on the recommendation. Keep it professional and technical.`;
 
-        let text;
-        try {
-            // Attempt with high-end 3.1 model
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            text = response.text();
-        } catch (error) {
-            if (error.status === 503 || error.status === 429 || error.status === 404) {
-                console.log("Gemini 3.1 busy or unavailable, falling back to 1.5-flash...");
-                // Note: using 'gemini-1.5-flash' which is the standard identifier
-                const fallbackModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                const result = await fallbackModel.generateContent(prompt);
-                const response = await result.response;
-                text = response.text();
-            } else {
-                throw error;
-            }
-        }
-
+        const text = await safeGenerateContent(prompt);
         res.status(200).json({ status: 'success', insight: text });
     } catch (err) {
         console.error("AI Insight Error:", err);
         res.status(500).json({ status: 'fail', insight: "AI analysis currently calibrating..." });
     }
 });
+
 
 app.delete('/api/defects/:id', async (req, res) => {
     try {
@@ -279,15 +375,39 @@ app.post('/api/alerts/send', async (req, res) => {
 });
     
 
-// Catch-all
+// Catch-all (Authenticated)
 app.use((req, res, next) => {
     if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/v1')) {
-        return res.sendFile(path.join(__dirname, 'index.html'));
+        // Protect main HTML files
+        if (req.url.endsWith('.html') || req.url === '/') {
+            if (req.url.includes('login.html')) return next();
+            return protect(req, res, () => {
+                const file = req.url === '/' ? 'dashboard.html' : req.url;
+                res.sendFile(path.join(__dirname, file));
+            });
+        }
     }
     next();
 });
 
 const PORT = process.env.PORT || 3000;
-mongoose.connect(process.env.MONGODB_URI).then(() => {
+mongoose.connect(process.env.MONGODB_URI).then(async () => {
+    console.log('[DB] Connected to MongoDB');
+    
+    // Create default users if not exist
+    const adminExists = await User.findOne({ username: 'admin' });
+    if (!adminExists) {
+        const hashedPassword = await bcrypt.hash('admin123', 12);
+        await User.create({ username: 'admin', password: hashedPassword });
+        console.log('[AUTH] Default admin created (admin/admin123)');
+    }
+
+    const inspectExists = await User.findOne({ username: 'inspect' });
+    if (!inspectExists) {
+        const hashedPassword = await bcrypt.hash('inspect123', 12);
+        await User.create({ username: 'inspect', password: hashedPassword });
+        console.log('[AUTH] Default inspector created (inspect/inspect123)');
+    }
+
     server.listen(PORT, () => console.log(`Multi-Zone Backend running on port ${PORT}...`));
 });

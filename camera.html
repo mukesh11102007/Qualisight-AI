@@ -210,13 +210,31 @@
     <!-- HUD OVERLAY -->
     <div class="hud-overlay">
 
-        <!-- Header -->
+        <div class="fixed top-8 left-8 z-50 flex items-center gap-4 bg-white/10 backdrop-blur-md p-4 rounded-3xl border border-white/20 shadow-2xl">
+        <img src="/logo.png" class="w-10 h-10 object-contain rounded-xl shadow-lg" alt="QualiSight Logo">
+        <div>
+            <h1 class="text-xl font-bold tracking-tight text-white leading-none">QualiSight <span class="text-indigo-400 font-light">Vision</span></h1>
+            <div class="flex items-center gap-2 mt-1.5">
+                <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span class="text-[9px] font-black tracking-widest text-indigo-200 uppercase">Neural Stream Active</span>
+            </div>
+        </div>
+    </div>
+
         <div class="flex justify-between items-start mt-4">
-            <div class="glass-panel p-4 py-3 flex flex-col gap-1">
-                <div class="flex items-center text-[10px] font-bold tracking-[0.2em] uppercase text-cyan-400">
-                    <span class="rec-dot"></span> LIVE // REMOTE_UNIT_01
+            <div class="glass-panel p-4 py-3 flex items-center gap-4">
+                <div class="flex flex-col gap-1">
+                    <div class="flex items-center text-[10px] font-bold tracking-[0.2em] uppercase text-cyan-400">
+                        <span class="rec-dot"></span> LIVE // 
+                        <select id="zone-selector" class="bg-transparent border-none outline-none text-cyan-400 font-bold cursor-pointer uppercase pointer-events-auto">
+                            <option value="Chennai Unit 1" class="bg-slate-900">Chennai Unit 1</option>
+                            <option value="Chennai Unit 2" class="bg-slate-900">Chennai Unit 2</option>
+                            <option value="Global Unit 1" class="bg-slate-900">Global Unit 1</option>
+                            <option value="Global Unit 2" class="bg-slate-900">Global Unit 2</option>
+                        </select>
+                    </div>
+                    <div class="text-xs font-mono opacity-60" id="timestamp">2026.05.03 17:27:06</div>
                 </div>
-                <div class="text-xs font-mono opacity-60" id="timestamp">2026.05.03 17:27:06</div>
             </div>
 
             <button onclick="switchCamera()" class="btn-premium p-4 rounded-2xl pointer-events-auto">
@@ -281,11 +299,11 @@
         const startBtn = document.getElementById('start-btn');
         const aiStatus = document.getElementById('ai-status');
         const timestampEl = document.getElementById('timestamp');
+        const zoneSelector = document.getElementById('zone-selector');
         const body = document.body;
 
-        let GEMINI_API_KEY = "AIzaSyDSkGxh6c0wd-kYViYlt56PNwY_zro2L9s";
         const MODEL_NAME = "gemini-3.1-flash-lite-preview";
-        let GEMINI_URL = "";
+
 
         let isStreaming = false;
         let streamInterval = null;
@@ -311,17 +329,8 @@
             window.speechSynthesis.speak(utterance);
         }
 
-        async function fetchConfig() {
-            try {
-                const res = await fetch('/api/config');
-                const data = await res.json();
-                GEMINI_API_KEY = data.geminiApiKey;
-                GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
-                addLog("NEURAL_CONFIG_LOADED", "text-emerald-400");
-            } catch (err) {
-                addLog("CONFIG_LOAD_FAILED", "text-red-400");
-            }
-        }
+        // Configuration is now handled securely on the backend
+
 
         async function initCamera() {
             if (video.srcObject) {
@@ -357,8 +366,11 @@
             try {
                 await fetch('/v1/camera', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ zone: "Zone 1", image: base64 })
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
+                    body: JSON.stringify({ zone: zoneSelector.value, image: base64 })
                 });
             } catch (err) { }
         }
@@ -374,52 +386,57 @@
 
             addLog("ANALYZING_FRAME...", "text-cyan-400");
 
-            const prompt = `Perform Industrial Quality Check:
-1. Is the primary object a standard ink pen? 
-   - Note: MECHANICAL PENCILS are NOT pens. If it is a mechanical pencil, respond 'NO_PEN_DETECTED'.
-   - If NO pen is detected, respond ONLY 'NO_PEN_DETECTED'.
-2. If it IS a valid pen, check for:
-   - Ink Leak (smudges/liquid on barrel): respond 'INK_LEAK'
-   - Missing Cap (exposed nib): respond 'CAP_MISSING'
-   - Damaged/Broken Pen (cracked barrel, bent body, snapped tip): respond 'PEN_DAMAGED'
-   - Perfect condition: respond 'PEN_OK'
-Respond ONLY with one of the labels.`;
+            const prompt = `You are an advanced Industrial Quality AI. Analyze this image on a conveyor belt.
+1. Identify the object: PEN, MARKER, or PENCIL.
+2. Check for defects:
+   - WRONG_CAP_SIDE: Cap is placed on the wrong end of the barrel.
+   - DAMAGED: Cracked barrel, broken tip, or visible scratches.
+   - MISSING_CAP: Pen/Marker has no cap.
+   - LEAKING: Ink visible on the body.
+3. If no defects, respond with [OBJECT]_OK (e.g., PEN_OK).
+
+Return ONLY a short string in this format: [OBJECT]_[STATUS]
+Examples: MARKER_WRONG_CAP_SIDE, PENCIL_DAMAGED, PEN_OK, PEN_LEAKING.
+If no relevant object found, respond 'UNKNOWN'.`;
 
             try {
-                const response = await fetch(GEMINI_URL, {
+                const response = await fetch('/api/ai/inspect', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
                     body: JSON.stringify({
-                        contents: [{
-                            parts: [
-                                { text: prompt },
-                                { inline_data: { mime_type: "image/jpeg", data: base64Content } }
-                            ]
-                        }]
+                        image: base64Content,
+                        prompt: prompt
                     })
                 });
 
                 const data = await response.json();
-                if (data.candidates && data.candidates[0]) {
-                    const result = data.candidates[0].content.parts[0].text.trim().toUpperCase();
+                if (data.status === 'success') {
+                    const result = data.result.trim().toUpperCase();
 
-                    if (result === 'PEN_OK') {
-                        addLog("QUALITY_CHECK: PASSED (OK)", "text-emerald-400");
-                        speak("Quality check passed.");
+
+                    if (result.endsWith('_OK')) {
+                        addLog(`QUALITY_CHECK: ${result} (PASSED)`, "text-emerald-400");
+                        speak(`${result.split('_')[0]} quality check passed.`);
                     } else if (result === 'UNKNOWN') {
-                        addLog("STATUS: NO_OBJECT_DETECTED", "text-slate-400");
+                        addLog("STATUS: NO_OBJECT_DETECTED", "text-slate-400 font-bold");
                     } else {
-                        addLog(`DEFECT_DETECTED: ${result}`, "text-red-500 font-bold");
-                        speak(`Warning: ${result.replace('_', ' ')} detected.`);
+                        addLog(`ALARM: ${result}`, "text-rose-500 font-bold animate-pulse");
+                        speak(`Warning: ${result.replace(/_/g, ' ')} detected.`);
 
                         // Log to server gallery
                         fetch('/api/defects', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'ngrok-skip-browser-warning': 'true'
+                            },
                             body: JSON.stringify({
                                 image: canvas.toDataURL('image/jpeg', 0.7),
                                 message: result,
-                                zone: "Zone 1"
+                                zone: zoneSelector.value
                             })
                         });
 
@@ -461,7 +478,8 @@ Respond ONLY with one of the labels.`;
             timestampEl.innerText = `${now.getFullYear()}.${(now.getMonth() + 1).toString().padStart(2, '0')}.${now.getDate().toString().padStart(2, '0')} ${now.toLocaleTimeString('en-GB')}`;
         }, 1000);
 
-        fetchConfig();
+        // fetchConfig(); // No longer needed as API key is on backend
+
         initCamera();
     </script>
 </body>

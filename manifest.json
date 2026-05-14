@@ -1,0 +1,17 @@
+{
+  "name": "QualiSight AI Enterprise",
+  "short_name": "QualiSight",
+  "description": "Industrial AI Quality Inspection System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2592/2592317.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

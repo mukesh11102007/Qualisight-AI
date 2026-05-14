@@ -7,9 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <style>
         body { font-family: 'Outfit', sans-serif; background: #f8fafc; color: #0f172a; height: 100vh; width: 100vw; display: flex; overflow: hidden; }
-        .sidebar { background: #ffffff; border-right: 1px solid #e2e8f0; }
+        .sidebar { background: #ffffff; border-right: 1px solid #e2e8f0; height: 100vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent; }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         .card { background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); transition: transform 0.2s, box-shadow 0.2s; }
         .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .stream-box { background: #0f172a; border-radius: 30px; overflow: hidden; position: relative; aspect-ratio: 16/9; }
@@ -33,14 +37,33 @@
         .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         input:checked + .slider { background-color: #0f172a; }
         input:checked + .slider:before { transform: translateX(20px); }
+
+        @media (max-width: 768px) {
+            .sidebar { position: absolute; left: -100%; top: 0; bottom: 0; z-index: 50; transition: left 0.3s ease; box-shadow: 20px 0 50px rgba(0,0,0,0.1); width: 85vw !important; max-width: 300px; }
+            .sidebar.open { left: 0; }
+        }
     </style>
 </head>
 <body>
 
+    <!-- Mobile Header -->
+    <div class="lg:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-40">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-black italic text-xs">Q</div>
+            <h1 class="font-bold text-slate-900">QualiSight</h1>
+        </div>
+        <button id="menu-toggle" class="p-2 text-slate-600">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+        </button>
+    </div>
+
+    <!-- Sidebar Overlay -->
+    <div id="sidebar-overlay" class="lg:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 hidden"></div>
+
     <!-- Sidebar -->
-    <aside class="sidebar w-72 p-8 flex flex-col gap-10 shrink-0">
+    <aside id="sidebar" class="sidebar w-72 p-8 flex flex-col gap-10 shrink-0">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black italic">Q</div>
+            <img src="/logo.png" class="w-10 h-10 object-contain rounded-xl shadow-sm" alt="QualiSight Logo">
             <div>
                 <h1 class="text-xl font-bold tracking-tight text-slate-900 leading-none">QualiSight</h1>
                 <span class="text-[9px] font-black uppercase tracking-widest text-slate-400">Enterprise AI</span>
@@ -50,10 +73,12 @@
         <!-- Factory Selector -->
         <div class="flex flex-col gap-2">
             <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-2">Location Hub</span>
-            <select class="card p-3 text-xs font-bold text-slate-700 appearance-none bg-slate-50 cursor-pointer outline-none">
-                <option>CHENNAI_PLANT_01</option>
-                <option>BANGALORE_HUB_04</option>
-                <option>MUMBAI_ZONE_02</option>
+            <select id="location-hub" class="card p-3 text-xs font-bold text-slate-700 appearance-none bg-slate-50 cursor-pointer outline-none">
+                <option value="all">ALL_LOCATIONS</option>
+                <option value="Chennai Unit 1">CHENNAI_UNIT_1</option>
+                <option value="Chennai Unit 2">CHENNAI_UNIT_2</option>
+                <option value="Global Unit 1">GLOBAL_UNIT_1</option>
+                <option value="Global Unit 2">GLOBAL_UNIT_2</option>
             </select>
         </div>
 
@@ -79,6 +104,10 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     Remote Units
                 </a>
+                <a href="/camera.html" target="_blank" class="flex items-center gap-3 text-slate-500 hover:text-slate-900 p-3 rounded-xl transition-all text-sm font-medium">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    Inspection
+                </a>
                 <a href="#" onclick="generateReport()" class="flex items-center gap-3 text-slate-500 hover:text-indigo-600 p-3 rounded-xl transition-all text-sm font-bold border border-dashed border-slate-200 mt-4 bg-slate-50/50">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                     Export shift Report
@@ -94,61 +123,65 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 h-full overflow-y-auto bg-slate-50/50 p-10 flex flex-col gap-10">
+    <main class="flex-1 p-10 flex flex-col gap-10 overflow-y-auto">
         
-        <!-- Top Section -->
-        <div class="flex justify-between items-end">
+        <!-- Header -->
+        <header class="control-center-header flex justify-between items-center">
             <div>
-                <p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">Global Monitoring</p>
-                <h2 class="text-4xl font-bold text-slate-900">Control Center</h2>
+                <h4 class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">Global Monitoring</h4>
+                <h1 class="text-4xl font-black text-slate-900 tracking-tight">Control Center</h1>
             </div>
-            
             <div class="flex gap-4">
-                <div class="card px-6 py-4 flex flex-col">
-                    <span class="text-[9px] font-bold uppercase text-slate-400 tracking-widest mb-1">Total Defects</span>
-                    <span id="defect-count" class="text-2xl font-bold text-slate-900">0</span>
+                <div class="card p-4 px-6 flex flex-col items-center min-w-[120px]">
+                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Defects</span>
+                    <span id="defect-count" class="text-2xl font-black text-slate-900">0</span>
                 </div>
-                <div class="card px-6 py-4 flex flex-col min-w-[140px]">
-                    <span class="text-[9px] font-bold uppercase text-slate-400 tracking-widest mb-1">AI Voice</span>
-                    <span class="text-emerald-500 font-bold text-sm flex items-center gap-2">
-                        <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse"></div> ACTIVE
+                <div class="card p-4 px-6 flex flex-col items-center min-w-[120px]">
+                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">AI Voice</span>
+                    <span class="text-[10px] font-black text-emerald-500 flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                        ACTIVE
                     </span>
                 </div>
-                <div id="maintenance-alert" class="card px-6 py-4 flex-col bg-amber-50 border-amber-200 hidden">
-                    <span class="text-[9px] font-bold uppercase text-amber-600 tracking-widest mb-1">Predictive Alert</span>
-                    <span class="text-amber-700 font-black text-[10px] animate-pulse">🔧 MAINTENANCE REQ.</span>
+            </div>
+        </header>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            <!-- Quality Chart -->
+            <div class="lg:col-span-2 card p-8 flex flex-col gap-6">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-slate-900">Factory Performance Index</h3>
+                    <div class="flex gap-2">
+                        <span class="w-2 h-2 bg-slate-900 rounded-full"></span>
+                        <span class="w-2 h-2 bg-slate-200 rounded-full"></span>
+                    </div>
+                </div>
+                <div class="h-48 w-full">
+                    <canvas id="qualityChart"></canvas>
                 </div>
             </div>
-        </div>
 
-        <!-- Live Chart & AI Insight Section -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
-            <div class="card p-8 h-64 lg:col-span-2 relative bg-white overflow-hidden">
-                <canvas id="qualityChart"></canvas>
-                <div class="absolute top-6 right-8 text-[10px] font-black uppercase tracking-widest text-slate-300">Factory Performance Index</div>
-            </div>
-            
-            <!-- Digital Twin Factory Map -->
-            <div class="card p-6 flex flex-col gap-4 bg-white relative overflow-hidden">
-                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Digital Twin [LIVE]</span>
-                <div class="flex-1 flex items-center justify-center p-4">
+            <!-- Digital Twin -->
+            <div class="card p-8 flex flex-col gap-6">
+                <h3 class="font-bold text-slate-900">Digital Twin [Live]</h3>
+                <div class="flex-1 flex items-center justify-center bg-slate-50 rounded-3xl p-4">
                     <svg viewBox="0 0 200 100" class="w-full h-full">
-                        <!-- Conveyor Belt -->
-                        <rect x="10" y="40" width="180" height="20" rx="10" fill="#f1f5f9" />
-                        <!-- Zone 1 -->
-                        <rect id="twin-1" x="30" y="30" width="40" height="40" rx="8" class="twin-idle" />
-                        <text x="50" y="55" text-anchor="middle" font-size="6" font-weight="bold" fill="#94a3b8">Z1</text>
-                        <!-- Zone 2 -->
-                        <rect id="twin-2" x="130" y="30" width="40" height="40" rx="8" class="twin-idle" />
-                        <text x="150" y="55" text-anchor="middle" font-size="6" font-weight="bold" fill="#94a3b8">Z2</text>
-                        <!-- Sensors -->
-                        <circle cx="50" cy="20" r="2" fill="#cbd5e1" />
-                        <circle cx="150" cy="20" r="2" fill="#cbd5e1" />
-                        <path d="M50 22 L50 30" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="2 1" />
-                        <path d="M150 22 L150 30" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="2 1" />
+                        <!-- Floor Plan -->
+                        <rect x="10" y="10" width="180" height="80" rx="15" fill="none" stroke="#e2e8f0" stroke-width="2" />
+                        <!-- Zones -->
+                        <rect id="twin-Chennai-Unit-1" x="30" y="30" width="30" height="30" rx="6" class="twin-idle" />
+                        <rect id="twin-Chennai-Unit-2" x="70" y="30" width="30" height="30" rx="6" class="twin-idle" />
+                        <rect id="twin-Global-Unit-1" x="110" y="30" width="30" height="30" rx="6" class="twin-idle" />
+                        <rect id="twin-Global-Unit-2" x="150" y="30" width="30" height="30" rx="6" class="twin-idle" />
+                        
+                        <text x="45" y="50" text-anchor="middle" font-size="4" font-weight="bold" fill="#94a3b8">C1</text>
+                        <text x="85" y="50" text-anchor="middle" font-size="4" font-weight="bold" fill="#94a3b8">C2</text>
+                        <text x="125" y="50" text-anchor="middle" font-size="4" font-weight="bold" fill="#94a3b8">G1</text>
+                        <text x="165" y="50" text-anchor="middle" font-size="4" font-weight="bold" fill="#94a3b8">G2</text>
                     </svg>
                 </div>
-                <div class="text-[9px] text-center font-bold text-slate-400">FACTORY_FLOOR_B_UNIT_04</div>
+                <div class="text-[9px] text-center font-bold text-slate-400 uppercase tracking-widest">Global Floor Monitoring</div>
             </div>
         </div>
 
@@ -174,35 +207,67 @@
         </div>
 
         <!-- Streams Grid -->
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-10">
-            <!-- Zone 1 -->
+        <div id="streams-container" class="grid grid-cols-1 xl:grid-cols-2 gap-10">
+            <!-- Chennai Unit 1 -->
             <div class="flex flex-col gap-4">
                 <div class="flex justify-between items-center px-2">
                     <h3 class="font-bold text-slate-800 flex items-center gap-2">
-                        Zone 1 <span id="status-1" class="text-[8px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-black uppercase">Offline</span>
+                        Chennai Unit 1 <span id="status-Chennai-Unit-1" class="text-[8px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-black uppercase">Offline</span>
                     </h3>
                 </div>
                 <div class="stream-box shadow-2xl">
-                    <img id="feed-Zone-1" class="w-full h-full object-contain hidden" />
-                    <div id="wait-Zone-1" class="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                    <img id="feed-Chennai-Unit-1" class="w-full h-full object-contain hidden" />
+                    <div id="wait-Chennai-Unit-1" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
                         <div class="w-8 h-8 border-2 border-slate-700 border-t-white rounded-full animate-spin"></div>
-                        <span class="text-[10px] font-bold text-slate-500 tracking-widest uppercase">Initializing...</span>
+                        <span class="text-[10px] font-bold text-slate-500 tracking-widest uppercase">Initializing Stream...</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Zone 2 -->
+            <!-- Chennai Unit 2 -->
             <div class="flex flex-col gap-4">
                 <div class="flex justify-between items-center px-2">
                     <h3 class="font-bold text-slate-800 flex items-center gap-2">
-                        Zone 2 <span id="status-2" class="text-[8px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-black uppercase">Offline</span>
+                        Chennai Unit 2 <span id="status-Chennai-Unit-2" class="text-[8px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-black uppercase">Offline</span>
                     </h3>
                 </div>
                 <div class="stream-box shadow-2xl">
-                    <img id="feed-Zone-2" class="w-full h-full object-contain hidden" />
-                    <div id="wait-Zone-2" class="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                    <img id="feed-Chennai-Unit-2" class="w-full h-full object-contain hidden" />
+                    <div id="wait-Chennai-Unit-2" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
                         <div class="w-8 h-8 border-2 border-slate-700 border-t-white rounded-full animate-spin"></div>
-                        <span class="text-[10px] font-bold text-slate-500 tracking-widest uppercase">Initializing...</span>
+                        <span class="text-[10px] font-bold text-slate-500 tracking-widest uppercase">Initializing Stream...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Unit 1 -->
+            <div class="flex flex-col gap-4">
+                <div class="flex justify-between items-center px-2">
+                    <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                        Global Unit 1 <span id="status-Global-Unit-1" class="text-[8px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-black uppercase">Offline</span>
+                    </h3>
+                </div>
+                <div class="stream-box shadow-2xl">
+                    <img id="feed-Global-Unit-1" class="w-full h-full object-contain hidden" />
+                    <div id="wait-Global-Unit-1" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
+                        <div class="w-8 h-8 border-2 border-slate-700 border-t-white rounded-full animate-spin"></div>
+                        <span class="text-[10px] font-bold text-slate-500 tracking-widest uppercase">Initializing Stream...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Unit 2 -->
+            <div class="flex flex-col gap-4">
+                <div class="flex justify-between items-center px-2">
+                    <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                        Global Unit 2 <span id="status-Global-Unit-2" class="text-[8px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-black uppercase">Offline</span>
+                    </h3>
+                </div>
+                <div class="stream-box shadow-2xl">
+                    <img id="feed-Global-Unit-2" class="w-full h-full object-contain hidden" />
+                    <div id="wait-Global-Unit-2" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
+                        <div class="w-8 h-8 border-2 border-slate-700 border-t-white rounded-full animate-spin"></div>
+                        <span class="text-[10px] font-bold text-slate-500 tracking-widest uppercase">Initializing Stream...</span>
                     </div>
                 </div>
             </div>
@@ -221,6 +286,7 @@
     <script>
         let ws = null;
         let qualityChart = null;
+        let currentDefects = [];
         const autoPilot = document.getElementById('auto-pilot-toggle');
 
         function speak(text) {
@@ -231,7 +297,9 @@
         }
 
         function initChart() {
-            const ctx = document.getElementById('qualityChart').getContext('2d');
+            const canvas = document.getElementById('qualityChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
             qualityChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -259,6 +327,7 @@
         }
 
         function updateChart(isDefect) {
+            if (!qualityChart) return;
             const current = qualityChart.data.datasets[0].data.slice(-1)[0];
             const next = isDefect ? Math.max(10, current - 20) : Math.min(100, current + 2);
             qualityChart.data.datasets[0].data.shift();
@@ -272,72 +341,43 @@
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'stream') {
-                    const zoneId = data.zone.replace(' ', '-');
+                    const zoneId = data.zone.replace(/ /g, '-');
                     const imgFeed = document.getElementById(`feed-${zoneId}`);
                     const waitingText = document.getElementById(`wait-${zoneId}`);
-                    const status = document.getElementById(data.zone === 'Zone 1' ? 'status-1' : 'status-2');
+                    const status = document.getElementById(`status-${zoneId}`);
                     
                     if (imgFeed) {
                         imgFeed.src = data.image;
                         imgFeed.classList.remove('hidden');
                         waitingText.classList.add('hidden');
-                        status.innerText = "ONLINE";
-                        status.className = "text-[8px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase pulse";
+                        if (status) {
+                            status.innerText = "ONLINE";
+                            status.className = "text-[8px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase pulse";
+                        }
                     }
                     
                     // Update Digital Twin
-                    const twinId = data.zone === 'Zone 1' ? 'twin-1' : 'twin-2';
-                    const twin = document.getElementById(twinId);
+                    const twin = document.getElementById(`twin-${zoneId}`);
                     if (twin) {
-                        twin.classList.remove('twin-idle');
                         twin.classList.add('twin-active');
-                        setTimeout(() => {
-                            twin.classList.remove('twin-active');
-                            twin.classList.add('twin-idle');
-                        }, 1000);
+                        setTimeout(() => twin.classList.remove('twin-active'), 1000);
                     }
-
-                    updateChart(false);
-                }
-                if (data.type === 'defect') { 
-                    handleDefect(data.data);
                 }
             };
             ws.onclose = () => setTimeout(connectWS, 2000);
         }
 
-        async function handleDefect(defect) {
-            loadDefects();
-            updateChart(true);
-            
-            const isAuto = localStorage.getItem('autoPilot') === 'true';
-            
-            speak(`Incident in ${defect.zone}. Issue: ${defect.message}.`);
-            
-            if (isAuto) {
-                _showAutoToast(`Auto-Dispatching Alert for ${defect.zone}...`);
-                sendAlert(defect.message, defect.image, defect.timestamp, defect.zone, null);
-            }
-        }
-
-        function _showAutoToast(msg) {
-            const toast = document.createElement('div');
-            toast.className = "fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-2xl z-50 animate-bounce";
-            toast.innerText = `🤖 AUTO-PILOT: ${msg}`;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
-        }
-
         async function loadDefects() {
-            const res = await fetch('/api/defects');
-            const result = await res.json();
             const container = document.getElementById('defect-history');
             const countEl = document.getElementById('defect-count');
+            const res = await fetch('/api/defects');
+            const result = await res.json();
             
             container.innerHTML = '';
             countEl.innerText = result.data.length;
+            currentDefects = result.data;
 
-            result.data.forEach(defect => {
+            result.data.forEach((defect, index) => {
                 const card = document.createElement('div');
                 card.className = 'card p-6 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500';
                 card.innerHTML = `
@@ -351,10 +391,10 @@
                             <span class="text-[9px] font-bold text-slate-400">${new Date(defect.timestamp).toLocaleTimeString()}</span>
                         </div>
                         <div class="flex gap-3">
-                            <button onclick="sendAlert('${defect.message}', '${defect.image}', '${defect.timestamp}', '${defect.zone}', this)" class="flex-1 py-2.5 bg-slate-900 text-white font-bold text-[10px] rounded-xl hover:bg-slate-800 transition-all uppercase tracking-wider">
+                            <button onclick="dispatchByIndex(${index}, this)" class="flex-1 py-2.5 bg-slate-900 text-white font-bold text-[10px] rounded-xl hover:bg-slate-800 transition-all uppercase tracking-wider">
                                 Dispatch Alert
                             </button>
-                            <button onclick="deleteDefect('${defect._id}')" class="px-4 py-2.5 bg-slate-50 text-slate-400 hover:text-red-500 font-bold text-[10px] rounded-xl transition-all uppercase">
+                            <button onclick="deleteDefectByIndex(${index})" class="px-4 py-2.5 bg-slate-50 text-slate-400 hover:text-red-500 font-bold text-[10px] rounded-xl transition-all uppercase">
                                 Del
                             </button>
                         </div>
@@ -362,6 +402,20 @@
                 `;
                 container.appendChild(card);
             });
+        }
+
+        async function dispatchByIndex(index, btn) {
+            const defect = currentDefects[index];
+            if (!defect) return;
+            await sendAlert(defect.message, defect.image, defect.timestamp, defect.zone, btn);
+        }
+
+        async function deleteDefectByIndex(index) {
+            const defect = currentDefects[index];
+            if (!defect) return;
+            if (!confirm(`Remove incident log for ${defect.zone}?`)) return;
+            const res = await fetch(`/api/defects/${defect._id}`, { method: 'DELETE' });
+            if (res.ok) loadDefects();
         }
 
         async function sendAlert(message, image, timestamp, zone, btn) {
@@ -372,17 +426,13 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message, image, timestamp, zone })
                 });
-                if (res.ok && btn) { 
-                    btn.innerText = "DISPATCHED"; 
-                    btn.className = "flex-1 py-2.5 bg-emerald-500 text-white font-bold text-[10px] rounded-xl transition-all uppercase";
+                if (res.ok) {
+                    if (btn) btn.innerText = "DISPATCHED";
+                    setTimeout(() => { if(btn) { btn.innerText = "Dispatch Alert"; btn.disabled = false; } }, 3000);
                 }
-            } catch (err) { if(btn) btn.innerText = "ERROR"; }
-        }
-
-        async function deleteDefect(id) {
-            if (!confirm("Remove incident log?")) return;
-            const res = await fetch(`/api/defects/${id}`, { method: 'DELETE' });
-            if (res.ok) loadDefects();
+            } catch (err) {
+                if (btn) { btn.innerText = "FAILED"; btn.disabled = false; }
+            }
         }
 
         async function logout() {
@@ -400,102 +450,59 @@
             autoPilot.checked = isAuto;
             autoPilot.addEventListener('change', (e) => {
                 localStorage.setItem('autoPilot', e.target.checked);
-                _showAutoToast(e.target.checked ? "SYSTEM ARMED" : "SYSTEM STANDBY");
             });
 
-            // Analytics Loop
+            // Location Filtering Logic
+            const locationHub = document.getElementById('location-hub');
+            locationHub.addEventListener('change', (e) => {
+                const selectedZone = e.target.value;
+                const zonesList = ['Chennai Unit 1', 'Chennai Unit 2', 'Global Unit 1', 'Global Unit 2'];
+                
+                zonesList.forEach(zone => {
+                    const zoneId = zone.replace(/ /g, '-');
+                    const feedImg = document.getElementById(`feed-${zoneId}`);
+                    if (feedImg) {
+                        const feedContainer = feedImg.closest('.flex-col');
+                        if (selectedZone === 'all' || selectedZone === zone) {
+                            feedContainer.classList.remove('hidden');
+                        } else {
+                            feedContainer.classList.add('hidden');
+                        }
+                    }
+                });
+            });
+
+            // Mobile menu logic
+            const menuToggle = document.getElementById('menu-toggle');
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+
+            menuToggle.onclick = () => {
+                sidebar.classList.toggle('open');
+                overlay.classList.toggle('hidden');
+            };
+            overlay.onclick = () => {
+                sidebar.classList.remove('open');
+                overlay.classList.add('hidden');
+            };
+
+            // AI Insights loop
             setInterval(async () => {
                 try {
-                    const res = await fetch('/api/analytics');
+                    const res = await fetch('/api/analytics/insights');
                     const data = await res.json();
-                    if (data.status === 'success') {
-                        const alert = document.getElementById('maintenance-alert');
-                        if (data.maintenanceStatus === 'MAINTENANCE_REQUIRED') {
-                            alert.classList.remove('hidden');
-                            alert.classList.add('flex');
-                        } else {
-                            alert.classList.add('hidden');
-                            alert.classList.remove('flex');
-                        }
-                        const val = data.performanceIndex;
-                        qualityChart.data.datasets[0].data.shift();
-                        qualityChart.data.datasets[0].data.push(val);
-                        qualityChart.update();
+                    if (data.insight) {
+                        document.getElementById('ai-insight-text').innerText = data.insight;
+                        if (autoPilot.checked) speak(data.insight);
                     }
-
-                    // Fetch AI Insights
-                    const insightRes = await fetch('/api/analytics/insights');
-                    const insightData = await insightRes.json();
-                    if (insightData.status === 'success') {
-                        document.getElementById('ai-insight-text').innerText = insightData.insight;
-                    }
-                } catch (e) { }
-            }, 10000); // 10s refresh for analytics and AI
+                } catch (e) {}
+            }, 30000);
         };
 
-        function generateReport() {
-            const btn = event.currentTarget;
-            const originalContent = btn.innerHTML;
-            btn.innerText = "GENERATING PDF...";
-            window.location.href = '/api/report';
-            setTimeout(() => {
-                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg> SHIFT_REPORT.PDF`;
-                btn.classList.add('text-emerald-600', 'border-emerald-200', 'bg-emerald-50');
-                _showAutoToast("REPORT READY FOR DOWNLOAD");
-            }, 2000);
-        }
-
-        // --- HIGH-END VOICE COMMAND SYSTEM ---
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognition) {
-            const recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.lang = 'en-US';
-            
-            recognition.onresult = (event) => {
-                const command = event.results[event.results.length - 1][0].transcript.toLowerCase();
-                console.log("Voice Command:", command);
-                
-                if (command.includes("report")) {
-                    _showAutoToast("Voice CMD: Generating Report...");
-                    window.location.href = '/api/report';
-                } else if (command.includes("status")) {
-                    const health = qualityChart.data.datasets[0].data.slice(-1)[0];
-                    speak(`System health is at ${health} percent.`);
-                } else if (command.includes("dispatch")) {
-                    const zone = (command.includes("one") || command.includes("1")) ? "Zone 1" : 
-                                 ((command.includes("two") || command.includes("2")) ? "Zone 2" : null);
-                    
-                    if (zone) {
-                        _showAutoToast(`Voice CMD: Dispatching ${zone}...`);
-                        // Find latest defect for this zone from the backend
-                        fetch('/api/defects')
-                            .then(r => r.json())
-                            .then(res => {
-                                const latest = res.data.find(d => d.zone === zone);
-                                if (latest) {
-                                    fetch('/api/alerts/send', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify(latest)
-                                    }).then(() => {
-                                        speak(`Alert dispatched for ${zone}.`);
-                                        _showAutoToast(`DISPATCHED: ${zone} ALERT SENT`);
-                                    });
-                                } else {
-                                    speak(`No recent defects found for ${zone}.`);
-                                }
-                            });
-                    }
-                } else if (command.includes("help")) {
-                    speak("You can say 'Report', 'Status', or 'Dispatch Zone 1' to control the system.");
-                }
-            };
-            
-            // Start listening automatically after user interaction
-            document.body.addEventListener('click', () => {
-                try { recognition.start(); } catch(e) {}
-            }, { once: true });
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+            });
         }
     </script>
 </body>
