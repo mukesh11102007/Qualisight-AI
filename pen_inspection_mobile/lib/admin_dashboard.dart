@@ -5,6 +5,11 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:permission_handler/permission_handler.dart';
+
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({Key? key}) : super(key: key);
@@ -12,10 +17,43 @@ class AdminDashboard extends StatefulWidget {
   _AdminDashboardState createState() => _AdminDashboardState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard> {
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color color;
+  final bool isOutlined;
+  const _ActionButton({required this.icon, required this.label, required this.onTap, required this.color, this.isOutlined = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isOutlined ? Colors.transparent : color,
+          border: isOutlined ? Border.all(color: color.withOpacity(0.2)) : null,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: isOutlined ? color : Colors.white),
+            const SizedBox(width: 12),
+            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isOutlined ? color : Colors.white)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProviderStateMixin {
   late WebSocketChannel _channel;
   late Stream _broadcastStream;
   late FlutterTts _tts;
+  late AnimationController _twinController;
   List<Map<String, dynamic>> _defects = [];
   bool _autoPilot = false;
   String _serverIp = "iciness-praising-public.ngrok-free.dev";
@@ -23,6 +61,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int _performanceIndex = 100;
   String _aiInsight = "Calibrating Neural Engine...";
   Timer? _analyticsTimer;
+  
+  // Voice Control
+  late stt.SpeechToText _speech;
+  bool _isListening = false;
+  String _lastWords = "";
 
   String get _baseUrl {
     String host = _serverIp.trim().replaceAll("https://", "").replaceAll("http://", "");
@@ -34,6 +77,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   void initState() {
     super.initState();
     _initTTS();
+    _initSpeech();
+    _twinController = AnimationController(vsync: this, duration: const Duration(seconds: 5))..repeat();
     _loadSettings().then((_) {
       _connectWebSocket();
       _loadDefects();
@@ -44,7 +89,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
   void _startAnalyticsLoop() {
     _analyticsTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       try {
-        final resp = await http.get(Uri.parse('$_baseUrl/api/analytics'));
+        final resp = await http.get(
+          Uri.parse('$_baseUrl/api/analytics'),
+          headers: {'ngrok-skip-browser-warning': 'true'},
+        );
         if (resp.statusCode == 200) {
           final data = jsonDecode(resp.body);
           setState(() {
@@ -53,7 +101,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
           });
         }
 
-        final insightResp = await http.get(Uri.parse('$_baseUrl/api/analytics/insights'));
+        final insightResp = await http.get(
+          Uri.parse('$_baseUrl/api/analytics/insights'),
+          headers: {'ngrok-skip-browser-warning': 'true'},
+        );
         if (insightResp.statusCode == 200) {
           final data = jsonDecode(insightResp.body);
           setState(() {
@@ -70,6 +121,65 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _tts.setSpeechRate(0.5);
     _tts.setPitch(1.0);
     _tts.setVolume(1.0);
+  }
+
+  void _initSpeech() async {
+    _speech = stt.SpeechToText();
+  }
+
+  Future<void> _listen() async {
+    if (!_isListening) {
+      var status = await Permission.microphone.request();
+      if (status.isGranted) {
+        bool available = await _speech.initialize(
+          onStatus: (val) => debugPrint('onStatus: $val'),
+          onError: (val) => debugPrint('onError: $val'),
+        );
+        if (available) {
+          setState(() => _isListening = true);
+          _speech.listen(
+            onResult: (val) => setState(() {
+              _lastWords = val.recognizedWords;
+              if (val.finalResult) {
+                _handleVoiceCommand(_lastWords.toLowerCase());
+                setState(() => _isListening = false);
+              }
+            }),
+          );
+        }
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+    }
+  }
+
+  void _handleVoiceCommand(String command) {
+    if (command.contains("report") || command.contains("download")) {
+      _speak("Downloading production report now.");
+      _downloadReport();
+    } else if (command.contains("auto") || command.contains("pilot")) {
+      _saveAutoPilot(!_autoPilot);
+      _speak("Auto Pilot is now ${_autoPilot ? 'active' : 'disabled'}.");
+    } else if (command.contains("status")) {
+      _speak("System status is ${_maintenanceStatus == 'SYSTEM_HEALTHY' ? 'optimal' : 'maintenance required'}. Performance is at $_performanceIndex percent.");
+    } else if (command.contains("clear")) {
+      _speak("Clearing incident logs.");
+      setState(() => _defects = []);
+    } else {
+      _speak("Command not recognized: $command");
+    }
+  }
+
+  Future<void> _downloadReport() async {
+    final url = Uri.parse('$_baseUrl/api/report');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not launch report download.')),
+      );
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -90,7 +200,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final wsUrl = _baseUrl.replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://');
     _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
     _broadcastStream = _channel.stream.asBroadcastStream();
-    _broadcastStream.listen(_handleMessage, onDone: () => Future.delayed(const Duration(seconds: 2), _connectWebSocket));
+    _broadcastStream.listen(_handleMessage, 
+      onDone: () => Future.delayed(const Duration(seconds: 2), _connectWebSocket),
+      onError: (e) => debugPrint("WS Error: $e"),
+    );
   }
 
   void _handleMessage(dynamic raw) {
@@ -101,7 +214,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
         setState(() => _defects.insert(0, defect));
         _handleNewDefect(defect);
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint("WS Parse Error: $e");
+    }
   }
 
   void _handleNewDefect(Map<String, dynamic> defect) {
@@ -119,7 +234,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/api/alerts/send'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
         body: jsonEncode({
           'message': defect['message'],
           'image': defect['image'],
@@ -143,7 +261,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Future<void> _loadDefects() async {
     try {
-      final resp = await http.get(Uri.parse('$_baseUrl/api/defects'));
+      final resp = await http.get(
+        Uri.parse('$_baseUrl/api/defects'),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+      );
       if (resp.statusCode == 200) {
         final json = jsonDecode(resp.body);
         setState(() => _defects = List<Map<String, dynamic>>.from(json['data']));
@@ -162,6 +283,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _channel.sink.close();
     _tts.stop();
     _analyticsTimer?.cancel();
+    _twinController.dispose();
     super.dispose();
   }
 
@@ -182,14 +304,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Row(
                   children: [
                     Container(
-                      width: 40,
-                      height: 40,
+                      width: 48,
+                      height: 48,
                       decoration: BoxDecoration(
                         color: const Color(0xFF0F172A),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Center(
-                        child: Text('Q', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, fontSize: 18)),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          '$_baseUrl/logo.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => const Center(
+                            child: Text('Q', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, fontSize: 18)),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -229,6 +358,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 const SizedBox(height: 12),
                 const _SidebarItem(icon: Icons.dashboard, label: 'Dashboard', isActive: true),
                 const _SidebarItem(icon: Icons.camera_alt, label: 'Remote Units', isActive: false),
+                const SizedBox(height: 40),
+                const Text('ENTERPRISE ACTIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+                const SizedBox(height: 12),
+                _ActionButton(
+                  icon: Icons.description_outlined,
+                  label: 'Download Report',
+                  onTap: _downloadReport,
+                  color: const Color(0xFF0F172A),
+                ),
+                const SizedBox(height: 12),
+                _ActionButton(
+                  icon: _isListening ? Icons.mic : Icons.mic_none,
+                  label: _isListening ? 'Listening...' : 'Voice Command',
+                  onTap: _listen,
+                  color: _isListening ? Colors.redAccent : const Color(0xFF0F172A),
+                  isOutlined: true,
+                ),
                 const Spacer(),
                 TextButton.icon(
                   onPressed: () => Navigator.pop(context),
@@ -271,7 +417,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                   const SizedBox(width: 8),
                                   Text("MAINTENANCE REQ.",
                                       style: TextStyle(
-                                          fontSize: 10, fontWeight: FontWeight.black, color: Colors.amber.shade800)),
+                                          fontSize: 10, fontWeight: FontWeight.w900, color: Colors.amber.shade800)),
+
                                 ],
                               ),
                             ),
@@ -294,10 +441,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                     child: Stack(
                       children: [
-                        const Center(child: Text('Performance Index Chart', style: TextStyle(color: Colors.grey))),
+                        AnimatedBuilder(
+                          animation: _twinController,
+                          builder: (context, child) {
+                            return CustomPaint(
+                              size: const Size(double.infinity, 200),
+                              painter: DigitalTwinPainter(_twinController.value),
+                            );
+                          },
+                        ),
                         const Align(
                           alignment: Alignment.topRight,
-                          child: Text('FACTORY PERFORMANCE INDEX', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 1.2)),
+                          child: Text('FACTORY DIGITAL TWIN (LIVE)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF22D3EE), letterSpacing: 1.2)),
                         ),
                       ],
                     ),
@@ -335,11 +490,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                   ),
                   const SizedBox(height: 40),
+                  const Text('CHENNAI OPERATIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 2)),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
-                      Expanded(child: _StreamBox(label: 'Zone 1', stream: _broadcastStream)),
-                      const SizedBox(width: 40),
-                      Expanded(child: _StreamBox(label: 'Zone 2', stream: _broadcastStream)),
+                      Expanded(child: _StreamBox(label: 'Chennai Unit 1', stream: _broadcastStream)),
+                      const SizedBox(width: 20),
+                      Expanded(child: _StreamBox(label: 'Chennai Unit 2', stream: _broadcastStream)),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  const Text('GLOBAL OPERATIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 2)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(child: _StreamBox(label: 'Global Unit 1', stream: _broadcastStream)),
+                      const SizedBox(width: 20),
+                      Expanded(child: _StreamBox(label: 'Global Unit 2', stream: _broadcastStream)),
                     ],
                   ),
                   const SizedBox(height: 40),
@@ -453,8 +620,15 @@ class _StreamBoxState extends State<_StreamBox> {
   late StreamSubscription _subscription;
 
   @override
-  void initState() {
-    super.initState();
+  void didUpdateWidget(_StreamBox oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.stream != widget.stream) {
+      _subscription.cancel();
+      _startListening();
+    }
+  }
+
+  void _startListening() {
     _subscription = widget.stream.listen((raw) {
       try {
         final data = jsonDecode(raw as String);
@@ -467,6 +641,12 @@ class _StreamBoxState extends State<_StreamBox> {
         }
       } catch (e) {}
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _startListening();
   }
 
   @override
@@ -600,4 +780,77 @@ class _IncidentCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class HUDPainter extends CustomPainter {
+  final bool isScanning;
+  HUDPainter(this.isScanning);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = isScanning ? const Color(0xFF22D3EE).withOpacity(0.5) : Colors.white10
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    const cornerSize = 40.0;
+    const padding = 30.0;
+
+    // Top Left
+    canvas.drawPath(Path()..moveTo(padding, padding + cornerSize)..lineTo(padding, padding)..lineTo(padding + cornerSize, padding), paint);
+    // Top Right
+    canvas.drawPath(Path()..moveTo(size.width - padding - cornerSize, padding)..lineTo(size.width - padding, padding)..lineTo(size.width - padding, padding + cornerSize), paint);
+    // Bottom Left
+    canvas.drawPath(Path()..moveTo(padding, size.height - padding - cornerSize)..lineTo(padding, size.height - padding)..lineTo(padding + cornerSize, size.height - padding), paint);
+    // Bottom Right
+    canvas.drawPath(Path()..moveTo(size.width - padding - cornerSize, size.height - padding)..lineTo(size.width - padding, size.height - padding)..lineTo(size.width - padding, size.height - padding - cornerSize), paint);
+  }
+
+  @override
+  bool shouldRepaint(HUDPainter oldDelegate) => oldDelegate.isScanning != isScanning;
+}
+
+class DigitalTwinPainter extends CustomPainter {
+  final double animationValue;
+  DigitalTwinPainter(this.animationValue);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF22D3EE).withOpacity(0.2)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    final activePaint = Paint()
+      ..color = const Color(0xFF22D3EE).withOpacity(0.8)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    // Draw grid/conveyor lines
+    for (int i = 0; i < 5; i++) {
+      double y = size.height * (0.2 + (i * 0.15));
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      
+      // Animated pulse line
+      double pulseX = (size.width * animationValue + (i * 100)) % size.width;
+      canvas.drawCircle(Offset(pulseX, y), 3, activePaint);
+    }
+
+    // Draw Zone Nodes
+    _drawNode(canvas, Offset(size.width * 0.2, size.height * 0.35), "CHE_01", activePaint);
+    _drawNode(canvas, Offset(size.width * 0.4, size.height * 0.35), "CHE_02", activePaint);
+    _drawNode(canvas, Offset(size.width * 0.6, size.height * 0.65), "GLO_01", activePaint);
+    _drawNode(canvas, Offset(size.width * 0.8, size.height * 0.65), "GLO_02", activePaint);
+  }
+
+  void _drawNode(Canvas canvas, Offset center, String label, Paint paint) {
+    canvas.drawRect(Rect.fromCenter(center: center, width: 60, height: 40), paint);
+    TextPainter(
+      text: TextSpan(text: label, style: const TextStyle(color: Color(0xFF22D3EE), fontSize: 8, fontWeight: FontWeight.bold)),
+      textDirection: TextDirection.ltr,
+    )..layout()..paint(canvas, Offset(center.dx - 25, center.dy - 5));
+  }
+
+  @override
+  bool shouldRepaint(DigitalTwinPainter oldDelegate) => oldDelegate.animationValue != animationValue;
 }

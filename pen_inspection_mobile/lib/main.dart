@@ -59,7 +59,7 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
   
   String selectedZone = "Zone 1";
   String serverIp = "iciness-praising-public.ngrok-free.dev"; 
-  final String geminiApiKey = "AIzaSyDSkGxh6c0wd-kYViYlt56PNwY_zro2L9s";
+
 
   String get baseUrl {
     String trimmed = serverIp.trim();
@@ -80,8 +80,9 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
     return "http://$host:3000";
   }
   
-  // Updated to v1beta which is more stable for flash models
-  String get geminiUrl => "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=$geminiApiKey";
+  // AI inspection is now proxied through the backend for security and key rotation
+  String get aiInspectUrl => "$baseUrl/api/ai/inspect";
+
 
   final List<Map<String, dynamic>> _logs = [];
 
@@ -193,7 +194,10 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
       debugPrint("UPLOADING_TO: $baseUrl/v1/camera");
       final resp = await http.post(
         Uri.parse("$baseUrl/v1/camera"),
-        headers: {"Content-Type": "application/json"},
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true"
+        },
         body: jsonEncode({"zone": selectedZone, "image": dataUrl}),
       ).timeout(const Duration(seconds: 5));
 
@@ -219,53 +223,59 @@ class CameraScreenState extends State<CameraScreen> with SingleTickerProviderSta
       List<int> compressed = img.encodeJpg(decoded, quality: 45); 
       String base64Content = base64Encode(compressed);
 
-      const prompt = """Perform Industrial Quality Check:
-1. Is the primary object a standard ink pen? 
-   - Note: MECHANICAL PENCILS are NOT pens. If it is a mechanical pencil, respond 'NO_PEN_DETECTED'.
-   - If NO pen is detected, respond ONLY 'NO_PEN_DETECTED'.
-2. If it IS a valid pen, check for:
-   - Ink Leak (smudges/liquid on barrel): respond 'INK_LEAK'
-   - Missing Cap (exposed nib): respond 'CAP_MISSING'
-   - Damaged/Broken Pen (cracked barrel, bent body, snapped tip): respond 'PEN_DAMAGED'
-   - Perfect condition: respond 'PEN_OK'
-Respond ONLY with one of the labels.""";
+      const prompt = """You are an advanced Industrial Quality AI. Analyze this image on a conveyor belt.
+1. Identify the object: PEN, MARKER, or PENCIL.
+2. Check for defects:
+   - WRONG_CAP_SIDE: Cap is placed on the wrong end of the barrel.
+   - DAMAGED: Cracked barrel, broken tip, or visible scratches.
+   - MISSING_CAP: Pen/Marker has no cap.
+   - LEAKING: Ink visible on the body.
+3. If no defects, respond with [OBJECT]_OK (e.g., PEN_OK).
+
+Return ONLY a short string in this format: [OBJECT]_[STATUS]
+Examples: MARKER_WRONG_CAP_SIDE, PENCIL_DAMAGED, PEN_OK, PEN_LEAKING.
+If no relevant object found, respond 'UNKNOWN'.""";
 
       final response = await http.post(
-        Uri.parse(geminiUrl),
-        headers: {"Content-Type": "application/json"},
+        Uri.parse(aiInspectUrl),
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true"
+        },
         body: jsonEncode({
-          "contents": [
-            {
-              "parts": [
-                {"text": prompt},
-                {"inline_data": {"mime_type": "image/jpeg", "data": base64Content}}
-              ]
-            }
-          ]
+          "image": base64Content,
+          "prompt": prompt,
         }),
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final result = data['candidates'][0]['content']['parts'][0]['text'].toString().trim().toUpperCase();
-        
-        if (result == "PEN_OK") {
-          _addLog("QUALITY: PASSED (OK)", color: Colors.greenAccent);
-          _speak("Quality check passed.");
-        } else if (result == "UNKNOWN") {
-          _addLog("STATUS: NO_OBJECT", color: Colors.white30);
+        if (data['status'] == 'success') {
+          final result = data['result'].toString().trim().toUpperCase();
+
+          if (result.endsWith("_OK")) {
+            _addLog("QUALITY: ${result.split('_')[0]} (PASSED)", color: Colors.greenAccent);
+            _speak("${result.split('_')[0]} quality check passed.");
+          } else if (result == "UNKNOWN") {
+            _addLog("STATUS: NO_OBJECT", color: Colors.white30);
+          } else {
+            _addLog("ALARM: $result", color: Colors.redAccent);
+            _speak("Warning: ${result.replaceAll('_', ' ')} detected.");
+            http.post(
+              Uri.parse("$baseUrl/api/defects"),
+              headers: {
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true"
+              },
+              body: jsonEncode({
+                "image": "data:image/jpeg;base64,$base64Content", 
+                "message": result, 
+                "zone": selectedZone
+              }),
+            );
+          }
         } else {
-          _addLog("DEFECT: $result", color: Colors.redAccent);
-          _speak("Warning: ${result.replaceAll('_', ' ')} detected.");
-          http.post(
-            Uri.parse("$baseUrl/api/defects"),
-            headers: {"Content-Type": "application/json"},
-            body: jsonEncode({
-              "image": "data:image/jpeg;base64,$base64Content", 
-              "message": result, 
-              "zone": selectedZone
-            }),
-          );
+          _addLog("NEURAL: STATUS_FAIL", color: Colors.orangeAccent);
         }
       } else {
         _addLog("NEURAL: ERR_${response.statusCode}", color: Colors.orangeAccent);
@@ -274,6 +284,7 @@ Respond ONLY with one of the labels.""";
       _addLog("ERROR: NEURAL_TIMEOUT", color: Colors.redAccent);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -325,10 +336,11 @@ Respond ONLY with one of the labels.""";
               ),
             ),
           ),
-          CustomPaint(
-            size: Size.infinite,
-            painter: HUDPainter(isActive: _isStreaming),
-          ),
+            CustomPaint(
+              size: Size.infinite,
+              painter: HUDPainter(_isStreaming),
+            ),
+
         ],
       ),
     );
@@ -483,7 +495,7 @@ Respond ONLY with one of the labels.""";
               underline: const SizedBox(),
               isExpanded: true,
               style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-              items: ["Zone 1", "Zone 2"].map((String value) {
+              items: ["Chennai Unit 1", "Chennai Unit 2", "Global Unit 1", "Global Unit 2"].map((String value) {
                 return DropdownMenuItem<String>(
                   value: value,
                   child: Text(value.toUpperCase()),
@@ -574,13 +586,16 @@ Respond ONLY with one of the labels.""";
 }
 
 class HUDPainter extends CustomPainter {
-  final bool isActive;
-  HUDPainter({required this.isActive});
+  final bool isScanning;
+  HUDPainter(this.isScanning);
+
+
+
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = isActive ? Colors.cyanAccent.withOpacity(0.5) : Colors.white10
+      ..color = isScanning ? Colors.cyanAccent.withOpacity(0.5) : Colors.white10
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
@@ -598,5 +613,6 @@ class HUDPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(HUDPainter oldDelegate) => oldDelegate.isActive != isActive;
+  bool shouldRepaint(HUDPainter oldDelegate) => oldDelegate.isScanning != isScanning;
+
 }
